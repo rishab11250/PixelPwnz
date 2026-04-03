@@ -1,61 +1,69 @@
-function DatasetCard({ name, value, percentageChange, timestamp }) {
+import { motion } from 'motion/react'
+import { AreaChart, Area, ResponsiveContainer } from 'recharts'
+import { useMemo } from 'react'
+
+function spark(trend = 'up', n = 14) {
+  let v = 40 + Math.random() * 20
+  return Array.from({ length: n }, (_, i) => {
+    v += trend === 'up' ? Math.random() * 6 - 1.5 : Math.random() * 6 - 4.5
+    v = Math.max(5, Math.min(95, v))
+    return { x: i, y: Math.round(v * 10) / 10 }
+  })
+}
+
+function DatasetCard({ name, value, unit, percentageChange, timestamp, accent = '#f59e0b' }) {
   const isPositive = percentageChange >= 0
+  const data = useMemo(() => spark(isPositive ? 'up' : 'down'), [isPositive])
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950 p-5 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-violet-500/30 hover:shadow-[0_20px_50px_rgba(15,23,42,0.6),0_0_30px_rgba(139,92,246,0.08)]">
-      {/* Glow Effect on Hover */}
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-violet-500/5 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
+    <motion.article
+      whileHover={{ y: -2 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      className="card group relative flex flex-col overflow-hidden"
+    >
+      {/* Accent top strip */}
+      <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 10%, ${accent}50 50%, transparent 90%)` }} />
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-            isPositive
-              ? 'bg-emerald-500/10 text-emerald-400'
-              : 'bg-rose-500/10 text-rose-400'
-          }`}>
-            {isPositive ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                <polyline points="17 6 23 6 23 12" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
-                <polyline points="17 18 23 18 23 12" />
-              </svg>
-            )}
-          </span>
-          <h3 className="text-sm font-semibold text-slate-100">{name}</h3>
+      <div className="flex flex-1 items-start justify-between p-4 pb-0">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-text-secondary">{name}</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tabular-nums tracking-tight">{typeof value === 'number' ? value.toLocaleString() : value}</span>
+            {unit && <span className="text-xs font-medium text-text-muted">{unit}</span>}
+          </div>
         </div>
-
         <span
-          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-            isPositive
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-          }`}
+          className="mt-1 rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+          style={{ background: isPositive ? 'rgba(52,211,153,0.12)' : 'rgba(251,113,133,0.12)', color: isPositive ? '#34d399' : '#fb7185' }}
         >
-          {isPositive ? '↑' : '↓'} {Math.abs(percentageChange).toFixed(1)}%
+          {isPositive ? '+' : ''}{percentageChange.toFixed(1)}%
         </span>
       </div>
 
-      {/* Value */}
-      <div className="mt-4 text-3xl font-bold tracking-tight text-white">
-        {value.toLocaleString()}
+      {/* Sparkline */}
+      <div className="h-14 w-full px-1 opacity-50 transition-opacity group-hover:opacity-90">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`sg-${name}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={accent} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="y" stroke={accent} strokeWidth={1.5} fill={`url(#sg-${name})`} dot={false} isAnimationActive={false} />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Footer */}
-      <div className="mt-4 flex items-center justify-between border-t border-slate-800/60 pt-3">
-        <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
-          Last updated
-        </span>
-        <span className="flex items-center gap-1.5 text-xs text-slate-400">
-          <span className="h-1 w-1 rounded-full bg-slate-600" />
-          {timestamp}
-        </span>
+      <div className="flex items-center justify-between border-t border-edge px-4 py-2.5">
+        <span className="text-[10px] text-text-muted">{timestamp}</span>
+        <div className="flex items-center gap-1.5 text-[10px] font-medium text-text-muted">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
+          LIVE
+        </div>
       </div>
-    </article>
+    </motion.article>
   )
 }
 
