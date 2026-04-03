@@ -14,10 +14,10 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
-// Main Route
-app.get('/', (req, res) => {
-    res.send('API is running...');
-});
+// API Routes
+app.use('/api/datasets', require('./routes/datasets'));
+app.use('/api/datasets', require('./routes/snapshots'));
+app.use('/api', require('./routes/events'));
 
 const PORT = process.env.PORT || 5000;
 
