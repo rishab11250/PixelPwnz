@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api } from '../lib/api.js'
+import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
+import TimelineChart from '../components/charts/TimelineChart.jsx'
+import Loader from '../components/ui/Loader.jsx'
+
+const TEN_D_MS = 10 * 24 * 60 * 60 * 1000
 
 /* ── Accent map by category ───────────────────────── */
 const ACCENT = {
@@ -53,28 +58,29 @@ function ChartTip({ active, payload, label }) {
 /* ══════════════════════════════════════════════════ */
 function DatasetPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { minTime, simulatedTime } = useTimeMachine()
   const [dataset, setDataset] = useState(null)
   const [snapshots, setSnapshots] = useState([])
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetchingNow, setFetchingNow] = useState(false)
-  const [scrubIndex, setScrubIndex] = useState(-1)
-  const [isPlaying, setIsPlaying] = useState(false)
 
-  // Fetch dataset info, snapshots, and events
   useEffect(() => {
     async function load() {
       try {
+        const fromMs = Math.max(minTime, simulatedTime - TEN_D_MS)
+        const fromIso = new Date(fromMs).toISOString()
+        const toIso = new Date(simulatedTime).toISOString()
         const [allDs, snaps, evs] = await Promise.all([
           api.getDatasets(),
-          api.getSnapshots(id),
+          api.getSnapshots(id, fromIso, toIso),
           api.getDatasetEvents(id),
         ])
         const ds = allDs.find(d => d._id === id)
         setDataset(ds || null)
         setSnapshots(snaps)
-        setScrubIndex(snaps.length - 1)
-        setEvents(evs.slice(0, 10))
+        setEvents(evs)
         setLoading(false)
       } catch (err) {
         console.error('Failed to load dataset:', err)
@@ -82,57 +88,50 @@ function DatasetPage() {
       }
     }
     load()
-  }, [id])
+  }, [id, minTime, simulatedTime])
 
   // Handle manual fetch
   async function handleFetchNow() {
     setFetchingNow(true)
     try {
       await api.fetchNow(id)
-      // Refresh snapshots & events
+      const fromMs = Math.max(minTime, simulatedTime - TEN_D_MS)
+      const fromIso = new Date(fromMs).toISOString()
+      const toIso = new Date(simulatedTime).toISOString()
       const [snaps, evs] = await Promise.all([
-        api.getSnapshots(id),
+        api.getSnapshots(id, fromIso, toIso),
         api.getDatasetEvents(id),
       ])
       setSnapshots(snaps)
-      setScrubIndex(snaps.length - 1)
-      setEvents(evs.slice(0, 10))
+      setEvents(evs)
     } catch (err) {
       console.error('Manual fetch failed:', err)
     }
     setFetchingNow(false)
   }
 
-  // Auto-play effect
-  useEffect(() => {
-    if (!isPlaying) return
-    const interval = setInterval(() => {
-      setScrubIndex(prev => {
-        if (prev >= snapshots.length - 1) {
-          setIsPlaying(false) // pause at end
-          return prev
-        }
-        return prev + 1
-      })
-    }, 250) // Fast 250ms interval for nice demo replay
-    return () => clearInterval(interval)
-  }, [isPlaying, snapshots.length])
-
-  // Sliced data based on scrubber
+  // Sliced data based on time machine
   const slicedSnapshots = useMemo(() => {
-    if (scrubIndex === -1 || snapshots.length === 0) return snapshots
-    return snapshots.slice(0, Math.min(scrubIndex + 1, snapshots.length))
-  }, [snapshots, scrubIndex])
-
-  const cutoffDate = slicedSnapshots.length > 0 ? new Date(slicedSnapshots[slicedSnapshots.length - 1].timestamp) : new Date()
+    return snapshots.filter(s => new Date(s.timestamp).getTime() <= simulatedTime)
+  }, [snapshots, simulatedTime])
 
   // Chart data
   const timelineData = useMemo(() => {
-    return slicedSnapshots.map(s => ({
+    return slicedSnapshots.map((s) => ({
       label: new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullLabel: new Date(s.timestamp).toLocaleString(),
       value: s.value,
+      fullTs: s.timestamp,
     }))
   }, [slicedSnapshots])
+
+  const timelineEvents = useMemo(() => {
+    return events.filter(
+      (e) =>
+        ['high', 'medium', 'low'].includes(e.severity) &&
+        new Date(e.timestamp).getTime() <= simulatedTime,
+    )
+  }, [events, simulatedTime])
 
   // Distribution data (histogram of values)
   const distData = useMemo(() => {
@@ -160,24 +159,16 @@ function DatasetPage() {
     const prev = slicedSnapshots.length > 1 ? slicedSnapshots[slicedSnapshots.length - 2] : latest
     const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value) * 100 : 0
 
-    // Filter anomalies up to the cutoff date
+    const cutoffDate = new Date(latest.timestamp)
+
     const anomalies = events.filter(ev => ev.severity === 'high' && new Date(ev.timestamp) <= cutoffDate).length
 
     return { current: latest.value, change: pct, total: slicedSnapshots.length, anomalies }
-  }, [slicedSnapshots, events, cutoffDate])
+  }, [slicedSnapshots, events])
 
   const accent = dataset ? (ACCENT[dataset.category] || '#a78bfa') : '#a78bfa'
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center py-40">
-        <div className="flex flex-col items-center gap-3 text-text-muted">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-          <span className="text-sm">Loading dataset…</span>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <Loader label="Loading dataset…" className="py-40" />
 
   if (!dataset) {
     return (
@@ -249,69 +240,17 @@ function DatasetPage() {
             </div>
             <div className="flex-1 p-4" style={{ minHeight: 280 }}>
               {timelineData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart data={timelineData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="dsGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={accent} stopOpacity={0.18} />
-                        <stop offset="100%" stopColor={accent} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(timelineData.length / 8))} />
-                    <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<ChartTip />} cursor={{ stroke: 'rgba(255,255,255,0.06)' }} />
-                    <Area type="monotone" dataKey="value" stroke={accent} strokeWidth={2} fill="url(#dsGrad)" dot={false} activeDot={{ r: 4, fill: accent, stroke: '#09090b', strokeWidth: 2 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data yet — use Fetch Now</div>
-              )}
-            </div>
-
-            {/* Scrubber */}
-            <div className="border-t border-edge bg-bg-raised/30 px-5 py-4 flex items-center gap-4">
-              <button
-                onClick={() => setIsPlaying(p => !p)}
-                disabled={snapshots.length < 2}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-text-base text-bg-base hover:bg-text-muted transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isPlaying ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                )}
-              </button>
-              <div className="flex-1 flex flex-col gap-2">
-                <div className="flex justify-between items-center text-[10px] text-text-muted font-mono uppercase tracking-wider">
-                  <span>{snapshots.length > 0 ? new Date(snapshots[0].timestamp).toLocaleDateString() : 'Start'}</span>
-                  <span className="font-bold px-2 py-0.5 rounded-md bg-bg-hover" style={{ color: accent }}>
-                    {slicedSnapshots.length > 0 ? new Date(slicedSnapshots[slicedSnapshots.length - 1].timestamp).toLocaleString() : 'Now'}
-                  </span>
-                  <span>{snapshots.length > 0 ? new Date(snapshots[snapshots.length - 1].timestamp).toLocaleDateString() : 'End'}</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(0, snapshots.length - 1)}
-                  value={scrubIndex === -1 ? Math.max(0, snapshots.length - 1) : scrubIndex}
-                  onChange={(e) => {
-                    setIsPlaying(false)
-                    setScrubIndex(Number(e.target.value))
-                  }}
-                  className="w-full h-1.5 appearance-none rounded-full bg-edge outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer hover:[&::-webkit-slider-thumb]:scale-110 transition-all cursor-pointer"
-                  style={{ 
-                    '--ds-accent': accent,
-                    backgroundImage: `linear-gradient(${accent}, ${accent})`,
-                    backgroundSize: `${snapshots.length > 1 ? ((scrubIndex === -1 ? snapshots.length - 1 : scrubIndex) / (snapshots.length - 1)) * 100 : 0}% 100%`,
-                    backgroundRepeat: 'no-repeat'
-                  }}
+                <TimelineChart
+                  data={timelineData}
+                  accent={accent}
+                  height={280}
+                  events={timelineEvents}
+                  gradientId="dsTimelineGrad"
+                  onEventClick={() => navigate('/events')}
                 />
-                <style dangerouslySetInnerHTML={{__html:`
-                  input[type=range]::-webkit-slider-thumb { background: var(--ds-accent); }
-                  input[type=range]::-moz-range-thumb { background: var(--ds-accent); }
-                `}} />
-              </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data in range — use Fetch Now</div>
+              )}
             </div>
           </motion.div>
 

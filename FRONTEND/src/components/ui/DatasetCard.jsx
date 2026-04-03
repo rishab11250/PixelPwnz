@@ -1,19 +1,38 @@
 import { motion } from 'motion/react'
 import { AreaChart, Area, ResponsiveContainer } from 'recharts'
-import { useMemo } from 'react'
+import { useMemo, useId } from 'react'
 
-function spark(trend = 'up', n = 14) {
-  let v = 40 + Math.random() * 20
+/** @param {number[]} values recent snapshot values (oldest → newest) */
+function mapSparkline(values) {
+  const ys = values.map(Number).filter((n) => !Number.isNaN(n))
+  if (ys.length < 2) return null
+  const lo = Math.min(...ys)
+  const hi = Math.max(...ys)
+  const span = hi - lo || 1
+  return ys.map((y, x) => ({
+    x,
+    y: 8 + ((y - lo) / span) * 84,
+  }))
+}
+
+function sparkDeterministic(trend = 'up', n = 14) {
+  let v = 50
   return Array.from({ length: n }, (_, i) => {
-    v += trend === 'up' ? Math.random() * 6 - 1.5 : Math.random() * 6 - 4.5
-    v = Math.max(5, Math.min(95, v))
+    v += trend === 'up' ? Math.sin(i * 0.7) * 4 + 2 : Math.sin(i * 0.7) * 4 - 2
+    v = Math.max(8, Math.min(92, v))
     return { x: i, y: Math.round(v * 10) / 10 }
   })
 }
 
-function DatasetCard({ name, value, unit, percentageChange, timestamp, accent = '#f59e0b' }) {
+/** @param {number[]=} sparklineValues recent values (oldest → newest) for a real sparkline */
+function DatasetCard({ name, value, unit, percentageChange = 0, timestamp, accent = '#f59e0b', sparklineValues }) {
   const isPositive = percentageChange >= 0
-  const data = useMemo(() => spark(isPositive ? 'up' : 'down'), [isPositive])
+  const gid = useId().replace(/:/g, '')
+  const data = useMemo(() => {
+    const fromApi = Array.isArray(sparklineValues) ? mapSparkline(sparklineValues) : null
+    if (fromApi?.length) return fromApi
+    return sparkDeterministic(isPositive ? 'up' : 'down')
+  }, [isPositive, sparklineValues])
 
   return (
     <motion.article
@@ -45,12 +64,12 @@ function DatasetCard({ name, value, unit, percentageChange, timestamp, accent = 
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id={`sg-${name}`} x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={accent} stopOpacity={0.25} />
                 <stop offset="100%" stopColor={accent} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <Area type="monotone" dataKey="y" stroke={accent} strokeWidth={1.5} fill={`url(#sg-${name})`} dot={false} isAnimationActive={false} />
+            <Area type="monotone" dataKey="y" stroke={accent} strokeWidth={1.5} fill={`url(#${gid})`} dot={false} isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

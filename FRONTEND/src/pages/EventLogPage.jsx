@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
 import BeforeAfterChart from '../components/BeforeAfterChart.jsx'
+import Loader from '../components/ui/Loader.jsx'
+import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
 
 /* ── Severity palette ─────────────────────────────── */
 const SEV = {
@@ -20,16 +22,6 @@ const TYPE_ICON = {
 }
 
 /* ── Helpers ──────────────────────────────────────── */
-function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'Just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
 function formatDate(iso) {
   return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
@@ -40,22 +32,31 @@ const pop = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transitio
 
 /* ══════════════════════════════════════════════════ */
 function EventLogPage() {
-  const [events, setEvents] = useState([])
+  const { simulatedTime } = useTimeMachine()
+  const [allEvents, setAllEvents] = useState([])
   const [datasets, setDatasets] = useState({})
   const [filter, setFilter] = useState('all')
+  const [datasetFilter, setDatasetFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [expanded, setExpanded] = useState(null)
   const [explanations, setExplanations] = useState({})
   const [loading, setLoading] = useState(true)
+
+  const datasetOptions = useMemo(() => Object.values(datasets), [datasets])
 
   // Fetch events + datasets on mount
   useEffect(() => {
     async function load() {
       try {
         const [ev, ds] = await Promise.all([api.getEvents(), api.getDatasets()])
-        setEvents(ev)
+        setAllEvents(ev)
         // Create id→dataset lookup
         const dsMap = {}
-        ds.forEach(d => { dsMap[d._id] = d })
+        ds.forEach(d => {
+          dsMap[d._id] = d
+          if (d._id != null) dsMap[String(d._id)] = d
+        })
         setDatasets(dsMap)
         setLoading(false)
       } catch (err) {
@@ -66,6 +67,11 @@ function EventLogPage() {
     load()
   }, [])
 
+  // Filter events by simulatedTime
+  const events = useMemo(() => {
+    return allEvents.filter(e => new Date(e.timestamp).getTime() <= simulatedTime)
+  }, [allEvents, simulatedTime])
+
   // Severity counts
   const counts = useMemo(() => {
     const c = { all: events.length, high: 0, medium: 0, low: 0 }
@@ -73,10 +79,22 @@ function EventLogPage() {
     return c
   }, [events])
 
-  // Filtered list
+  // Filtered list (severity + dataset + calendar range)
   const filtered = useMemo(() => {
-    return filter === 'all' ? events : events.filter(e => e.severity === filter)
-  }, [events, filter])
+    let list = filter === 'all' ? events : events.filter((e) => e.severity === filter)
+    if (datasetFilter !== 'all')
+      list = list.filter((e) => String(e.dataset_id) === datasetFilter)
+    if (dateFrom) {
+      const fromMs = new Date(dateFrom).getTime()
+      list = list.filter((e) => new Date(e.timestamp).getTime() >= fromMs)
+    }
+    if (dateTo) {
+      const end = new Date(dateTo)
+      end.setHours(23, 59, 59, 999)
+      list = list.filter((e) => new Date(e.timestamp).getTime() <= end.getTime())
+    }
+    return list
+  }, [events, filter, datasetFilter, dateFrom, dateTo])
 
   // Get AI explanation
   async function handleExplain(eventId) {
@@ -92,7 +110,7 @@ function EventLogPage() {
 
   // Dataset accent color
   function dsAccent(dsId) {
-    const ds = datasets[dsId]
+    const ds = datasets[dsId] ?? datasets[String(dsId)]
     if (!ds) return '#a78bfa'
     const cat = ds.category
     if (cat === 'crypto') return '#f59e0b'
@@ -101,30 +119,69 @@ function EventLogPage() {
     return '#a78bfa'
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center py-40">
-        <div className="flex flex-col items-center gap-3 text-text-muted">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-          <span className="text-sm">Loading events…</span>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <Loader label="Loading events…" className="py-40" />
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-0">
 
-      {/* ── Header ────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-edge px-8 py-5">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">Event Log</h1>
-          <p className="mt-0.5 text-sm text-text-secondary">All detected anomalies, spikes &amp; drops</p>
-        </div>
-        <Link to="/dashboard" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover">← Back</Link>
+      {/* ── Toolbar (title in Navbar) ───────────────────── */}
+      <header className="flex items-center justify-end border-b border-edge px-8 py-4">
+        <Link to="/dashboard" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover">
+          ← Dashboard
+        </Link>
       </header>
 
       <div className="px-8 py-6 flex flex-col gap-4">
+
+        {/* ── Dataset + date filters ───────────── */}
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Dataset
+            <select
+              value={datasetFilter}
+              onChange={(e) => setDatasetFilter(e.target.value)}
+              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
+            >
+              <option value="all">All datasets</option>
+              {datasetOptions.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            From
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            To
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
+            />
+          </label>
+          {(dateFrom || dateTo || datasetFilter !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom('')
+                setDateTo('')
+                setDatasetFilter('all')
+              }}
+              className="rounded-lg border border-edge px-3 py-2 text-xs text-text-muted transition-colors hover:border-bg-hover hover:text-text-primary"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
 
         {/* ── Filter Chips ─────────────────────── */}
         <div className="flex flex-wrap gap-2">
@@ -175,7 +232,7 @@ function EventLogPage() {
             )}
             {filtered.map(ev => {
               const sev = SEV[ev.severity] || SEV.low
-              const ds = datasets[ev.dataset_id]
+              const ds = datasets[ev.dataset_id] ?? datasets[String(ev.dataset_id)]
               const isExpanded = expanded === ev._id
               const accent = dsAccent(ev.dataset_id)
               const pctAbs = Math.abs(ev.percentage_change).toFixed(1)
@@ -252,7 +309,9 @@ function EventLogPage() {
 
                           {/* Mini Context Chart */}
                           <div className="card-flat px-3 py-2 mt-1">
-                            <span className="flex items-center gap-2 text-[10px] uppercase text-text-muted">Event Context <span className="opacity-50">(±5 points)</span></span>
+                            <span className="flex items-center gap-2 text-[10px] uppercase text-text-muted">
+                              Context — 7d before / 7d after
+                            </span>
                             <BeforeAfterChart datasetId={ev.dataset_id} eventTime={ev.timestamp} color={sev.color} />
                           </div>
 

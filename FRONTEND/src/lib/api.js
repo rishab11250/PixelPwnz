@@ -7,6 +7,9 @@ async function request(path) {
 }
 
 export const api = {
+  /** Earliest / latest snapshot time across all datasets (for time scrubber range). */
+  getTimeBounds: () => request('/meta/time-bounds'),
+
   // Datasets
   getDatasets: () => request('/datasets'),
   

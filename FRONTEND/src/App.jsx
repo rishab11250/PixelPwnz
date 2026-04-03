@@ -5,15 +5,25 @@ import DatasetPage from './pages/DatasetPage.jsx'
 import EventLogPage from './pages/EventLogPage.jsx'
 import MapPage from './pages/MapPage.jsx'
 import Sidebar from './components/layout/Sidebar.jsx'
+import Navbar from './components/layout/Navbar.jsx'
 import './App.css'
+
+import { TimeMachineProvider } from './contexts/TimeMachineContext.jsx'
+import TimelineSlider from './components/layout/TimelineSlider.jsx'
 
 /* Layout wrapper that includes the sidebar */
 function AppShell({ children }) {
   return (
-    <div className="flex min-h-svh bg-bg-base text-text-primary">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <TimeMachineProvider>
+      <div className="flex min-h-svh bg-bg-base text-text-primary pb-20">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Navbar />
+          <main className="flex-1 overflow-y-auto">{children}</main>
+        </div>
+        <TimelineSlider />
+      </div>
+    </TimeMachineProvider>
   )
 }
 

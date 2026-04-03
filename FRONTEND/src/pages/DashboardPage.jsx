@@ -1,8 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api } from '../lib/api.js'
+
+import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
+import TimelineChart from '../components/charts/TimelineChart.jsx'
+import Loader from '../components/ui/Loader.jsx'
+import DatasetCard from '../components/ui/DatasetCard.jsx'
+import { formatValueDisplay, timeAgoFromNow } from '../utils/format.js'
+
+const SEVEN_D_MS = 7 * 24 * 60 * 60 * 1000
 
 /* ── Category config ──────────────────────────────── */
 const CAT = {
@@ -22,49 +29,26 @@ function getGreeting() {
   return 'Good evening'
 }
 
-function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'Just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-function formatValue(v, unit) {
-  if (v == null || v === '—') return '—'
-  if (unit === 'USD') return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-  if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-  // Forex pairs (EUR, GBP, JPY, etc.) — show exchange rate
-  if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit)) return `${Number(v).toFixed(4)} ${unit}`
-  return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
-}
-
-/* ── Chart tooltip ────────────────────────────────── */
-function ChartTip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="card px-3 py-2 text-xs shadow-xl">
-      <p className="text-text-muted">{label}</p>
-      <p className="font-mono font-bold text-amber">{payload[0].value}</p>
-    </div>
-  )
-}
-
 /* ── Animation ────────────────────────────────────── */
 const pop = { hidden: { opacity: 0, y: 12, scale: 0.98 }, show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 22 } } }
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } }
 
 /* ══════════════════════════════════════════════════ */
 function DashboardPage() {
+  const navigate = useNavigate()
+  const { minTime, simulatedTime } = useTimeMachine()
   const [datasets, setDatasets] = useState([])
-  const [events, setEvents]   = useState([])
-  const [snapCache, setSnapCache] = useState({}) // id → latest snapshots
+  const [allEvents, setAllEvents] = useState([])
+  const [allSnaps, setAllSnaps] = useState({}) // id → snapshots up to simulatedTime
   const [activeCat, setActiveCat] = useState('all')
   const [activeDs, setActiveDs]   = useState(null) // selected dataset for chart
   const [chartSnaps, setChartSnaps] = useState([])
   const [loading, setLoading] = useState(true)
+
+  const chartWindowStart = useMemo(
+    () => Math.max(minTime, simulatedTime - SEVEN_D_MS),
+    [minTime, simulatedTime],
+  )
 
   // Fetch datasets + events on mount
   useEffect(() => {
@@ -72,20 +56,9 @@ function DashboardPage() {
       try {
         const [ds, ev] = await Promise.all([api.getDatasets(), api.getEvents()])
         setDatasets(ds)
-        setEvents(ev.slice(0, 10))
+        setAllEvents(ev)
         if (ds.length) setActiveDs(ds[0])
         setLoading(false)
-
-        // Background: fetch latest values for all datasets
-        for (const d of ds) {
-          api.getSnapshots(d._id).then(snaps => {
-            if (!snaps.length) return
-            const latest = snaps[snaps.length - 1]
-            const prev = snaps.length > 1 ? snaps[snaps.length - 2] : latest
-            const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value * 100) : 0
-            setSnapCache(p => ({ ...p, [d._id]: { value: latest.value, pct, ts: latest.timestamp, count: snaps.length } }))
-          }).catch(() => {})
-        }
       } catch (err) {
         console.error('Dashboard load failed:', err)
         setLoading(false)
@@ -94,19 +67,91 @@ function DashboardPage() {
     load()
   }, [])
 
-  // Load chart snapshots when active dataset changes
+  // Snapshots up to scrubber time (server-side `to`) — debounced
+  useEffect(() => {
+    if (!datasets.length) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const toIso = new Date(simulatedTime).toISOString()
+      try {
+        const entries = await Promise.all(
+          datasets.map(async (d) => {
+            try {
+              const snaps = await api.getSnapshots(d._id, undefined, toIso)
+              return [d._id, snaps]
+            } catch {
+              return [d._id, []]
+            }
+          }),
+        )
+        if (!cancelled) setAllSnaps(Object.fromEntries(entries))
+      } catch {
+        if (!cancelled) setAllSnaps({})
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [datasets, simulatedTime])
+
+  // Derived current metrics based on simulatedTime
+  const snapCache = useMemo(() => {
+    const cache = {}
+    for (const [id, snaps] of Object.entries(allSnaps)) {
+      const valid = snaps.filter(s => new Date(s.timestamp).getTime() <= simulatedTime)
+      if (!valid.length) {
+        cache[id] = { value: '—', pct: 0, ts: null, count: 0 }
+        continue
+      }
+      const latest = valid[valid.length - 1]
+      const prev = valid.length > 1 ? valid[valid.length - 2] : latest
+      const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value * 100) : 0
+      cache[id] = { value: latest.value, pct, ts: latest.timestamp, count: valid.length }
+    }
+    return cache
+  }, [allSnaps, simulatedTime])
+
+  // Chart: windowed fetch [chartWindowStart, simulatedTime]
   useEffect(() => {
     if (!activeDs?._id) return
-    api.getSnapshots(activeDs._id).then(setChartSnaps).catch(console.error)
-  }, [activeDs?._id])
+    let cancelled = false
+    const fromIso = new Date(chartWindowStart).toISOString()
+    const toIso = new Date(simulatedTime).toISOString()
+    api
+      .getSnapshots(activeDs._id, fromIso, toIso)
+      .then((snaps) => {
+        if (!cancelled) setChartSnaps(snaps)
+      })
+      .catch(console.error)
+    return () => {
+      cancelled = true
+    }
+  }, [activeDs?._id, chartWindowStart, simulatedTime])
 
-  // Chart data
   const chartData = useMemo(() => {
-    return chartSnaps.map(s => ({
-      label: new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      value: s.value,
-    }))
-  }, [chartSnaps])
+    return chartSnaps
+      .filter((s) => new Date(s.timestamp).getTime() <= simulatedTime)
+      .map((s) => ({
+        label: new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        fullLabel: new Date(s.timestamp).toLocaleString(),
+        value: s.value,
+        fullTs: s.timestamp,
+      }))
+  }, [chartSnaps, simulatedTime])
+
+  const chartEvents = useMemo(() => {
+    if (!activeDs?._id) return []
+    return allEvents.filter(
+      (e) =>
+        (e.dataset_id === activeDs._id || String(e.dataset_id) === String(activeDs._id)) &&
+        new Date(e.timestamp).getTime() <= simulatedTime,
+    )
+  }, [allEvents, activeDs, simulatedTime])
+
+  const events = useMemo(() => {
+    return allEvents.filter(e => new Date(e.timestamp).getTime() <= simulatedTime)
+  }, [allEvents, simulatedTime])
 
   // Grouped/filtered datasets
   const categories = useMemo(() => {
@@ -133,33 +178,17 @@ function DashboardPage() {
 
   const activeAccent = activeDs ? (CAT[activeDs.category]?.accent || '#a78bfa') : '#f59e0b'
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center py-40">
-        <div className="flex flex-col items-center gap-3 text-text-muted">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
-          <span className="text-sm">Loading dashboard…</span>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <Loader label="Loading dashboard…" className="py-40" />
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-0">
 
-      {/* ── Header ────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-edge px-8 py-5">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">{getGreeting()}</h1>
-          <p className="mt-0.5 text-sm text-text-secondary">Tracking <span className="font-mono text-text-primary">{stats.datasets}</span> datasets across {stats.categories} categories</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-edge bg-bg-raised px-3 py-2 text-sm text-text-muted transition-colors hover:border-bg-hover">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span className="hidden text-xs md:inline">Search…</span>
-            <kbd className="ml-3 hidden rounded border border-edge bg-bg-base px-1.5 py-0.5 text-[10px] font-mono text-text-muted md:inline">⌘K</kbd>
-          </div>
-        </div>
+      {/* ── Page intro (app title lives in Navbar) ───────────── */}
+      <header className="border-b border-edge px-8 py-5">
+        <h1 className="text-lg font-bold tracking-tight">{getGreeting()}</h1>
+        <p className="mt-0.5 text-sm text-text-secondary">
+          Tracking <span className="font-mono text-text-primary">{stats.datasets}</span> datasets across {stats.categories} categories
+        </p>
       </header>
 
       <div className="px-8 py-6 flex flex-col gap-6">
@@ -216,6 +245,31 @@ function DashboardPage() {
           })}
         </div>
 
+        {/* ── Dataset cards (real sparklines when data loaded) ── */}
+        {filteredDatasets.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredDatasets.slice(0, 6).map((ds) => {
+              const cat = CAT[ds.category] || { accent: '#a78bfa' }
+              const snap = snapCache[ds._id]
+              const snaps = allSnaps[ds._id] || []
+              const spark = snaps.length > 2 ? snaps.slice(-20).map((s) => s.value) : undefined
+              return (
+                <div key={ds._id} onClick={() => setActiveDs(ds)} className="cursor-pointer" role="presentation">
+                  <DatasetCard
+                    name={ds.name}
+                    value={snap?.value != null ? formatValueDisplay(snap.value, ds.unit) : '—'}
+                    unit=""
+                    percentageChange={snap?.pct ?? 0}
+                    timestamp={snap?.ts ? timeAgoFromNow(snap.ts) : '—'}
+                    accent={cat.accent}
+                    sparklineValues={spark}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Bento: Dataset Grid + Chart + Activity */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
 
@@ -254,13 +308,13 @@ function DashboardPage() {
                       </span>
                     </span>
                     <span className="col-span-2 text-right font-mono text-xs text-text-secondary">
-                      {snap ? formatValue(snap.value, ds.unit) : '—'}
+                      {snap ? formatValueDisplay(snap.value, ds.unit) : '—'}
                     </span>
                     <span className="col-span-2 text-right font-mono text-xs font-bold" style={{ color: snap ? (snap.pct >= 0 ? '#34d399' : '#fb7185') : '#52525b' }}>
                       {snap ? `${snap.pct >= 0 ? '+' : ''}${snap.pct.toFixed(2)}%` : '—'}
                     </span>
                     <span className="col-span-2 text-right text-[10px] text-text-muted">
-                      {snap ? timeAgo(snap.ts) : '—'}
+                      {snap?.ts ? timeAgoFromNow(snap.ts) : '—'}
                     </span>
                   </div>
                 )
@@ -292,7 +346,7 @@ function DashboardPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-xs text-text-primary">{ev.message}</p>
-                    <p className="mt-0.5 text-[10px] text-text-muted">{timeAgo(ev.timestamp)}</p>
+                    <p className="mt-0.5 text-[10px] text-text-muted">{timeAgoFromNow(ev.timestamp)}</p>
                   </div>
                 </motion.div>
               ))}
@@ -315,7 +369,9 @@ function DashboardPage() {
                     {activeDs?.name ?? 'Select a dataset'}
                   </motion.span>
                 </AnimatePresence>
-                <span className="text-xs text-text-muted">— {chartData.length} snapshots</span>
+                <span className="text-xs text-text-muted">
+                  — {chartData.length} pts · markers = events (click → log)
+                </span>
               </div>
               {activeDs && (
                 <Link to={`/dataset/${activeDs._id}`} className="text-xs font-semibold transition-colors hover:underline" style={{ color: activeAccent }}>
@@ -325,23 +381,16 @@ function DashboardPage() {
             </div>
             <div className="flex-1 p-4" style={{ minHeight: 240 }}>
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="mainGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={activeAccent} stopOpacity={0.15} />
-                        <stop offset="100%" stopColor={activeAccent} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.max(1, Math.floor(chartData.length / 10))} />
-                    <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<ChartTip />} cursor={{ stroke: 'rgba(255,255,255,0.06)' }} />
-                    <Area type="monotone" dataKey="value" stroke={activeAccent} strokeWidth={2} fill="url(#mainGrad)" dot={false} activeDot={{ r: 4, fill: activeAccent, stroke: '#09090b', strokeWidth: 2 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <TimelineChart
+                  data={chartData}
+                  accent={activeAccent}
+                  height={240}
+                  events={chartEvents}
+                  gradientId="dashMainGrad"
+                  onEventClick={() => navigate('/events')}
+                />
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data yet</div>
+                <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data in this range</div>
               )}
             </div>
           </motion.div>

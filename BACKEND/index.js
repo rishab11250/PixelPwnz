@@ -8,7 +8,7 @@ const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
 
-// Connect to Databasewtf 
+// Connect to Database
 connectDB();
 
 // Middleware
@@ -24,6 +24,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes (PRD endpoints)
+app.use('/api/meta', require('./routes/meta'));               // GET /api/meta/time-bounds
 app.use('/api/datasets', require('./routes/datasets'));       // GET /api/datasets, POST /api/datasets
 app.use('/api/datasets', require('./routes/snapshots'));       // GET /api/datasets/:id/snapshots, GET /api/datasets/:id/export
 app.use('/api', require('./routes/events'));                   // GET /api/events, GET /api/datasets/:id/events, GET /api/events/:id/explain

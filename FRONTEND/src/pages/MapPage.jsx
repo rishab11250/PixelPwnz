@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { api } from '../lib/api.js'
+import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
 
 /* ── Category config ──────────────────────────────── */
 const CAT = {
@@ -70,31 +71,23 @@ function FlyToMarker({ center }) {
 
 /* ══════════════════════════════════════════════════ */
 function MapPage() {
+  const { simulatedTime } = useTimeMachine()
   const [datasets, setDatasets] = useState([])
-  const [snapCache, setSnapCache] = useState({})
+  const [allSnaps, setAllSnaps] = useState({})
   const [activeCat, setActiveCat] = useState('all')
   const [selectedDs, setSelectedDs] = useState(null)
   const [flyTarget, setFlyTarget] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sideSearch, setSideSearch] = useState('')
+  const [mapEvents, setMapEvents] = useState([])
 
   useEffect(() => {
     async function load() {
       try {
-        const ds = await api.getDatasets()
+        const [ds, evs] = await Promise.all([api.getDatasets(), api.getEvents()])
         setDatasets(ds)
+        setMapEvents(evs)
         setLoading(false)
-
-        // Background: fetch latest snapshot for each
-        for (const d of ds) {
-          api.getSnapshots(d._id).then(snaps => {
-            if (!snaps.length) return
-            const latest = snaps[snaps.length - 1]
-            const prev = snaps.length > 1 ? snaps[snaps.length - 2] : latest
-            const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value * 100) : 0
-            setSnapCache(p => ({ ...p, [d._id]: { value: latest.value, pct, ts: latest.timestamp, count: snaps.length } }))
-          }).catch(() => {})
-        }
       } catch (err) {
         console.error('Map load failed:', err)
         setLoading(false)
@@ -102,6 +95,62 @@ function MapPage() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    if (!datasets.length) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const toIso = new Date(simulatedTime).toISOString()
+      const entries = await Promise.all(
+        datasets.map(async (d) => {
+          try {
+            const snaps = await api.getSnapshots(d._id, undefined, toIso)
+            return [d._id, snaps]
+          } catch {
+            return [d._id, []]
+          }
+        }),
+      )
+      if (!cancelled) setAllSnaps(Object.fromEntries(entries))
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [datasets, simulatedTime])
+
+  const geoEvents = useMemo(() => {
+    return mapEvents
+      .filter((e) => new Date(e.timestamp).getTime() <= simulatedTime)
+      .map((ev) => {
+        const ds = datasets.find(
+          (d) => d._id === ev.dataset_id || String(d._id) === String(ev.dataset_id),
+        )
+        if (!ds) return null
+        const loc = ds.location?.toLowerCase().replace(/, india$/i, '').trim()
+        const coords = COORDS[loc]
+        if (!coords) return null
+        return { ev, ds, coords }
+      })
+      .filter(Boolean)
+  }, [mapEvents, datasets, simulatedTime])
+
+  // Derived current metrics based on simulatedTime
+  const snapCache = useMemo(() => {
+    const cache = {}
+    for (const [id, snaps] of Object.entries(allSnaps)) {
+      const valid = snaps.filter(s => new Date(s.timestamp).getTime() <= simulatedTime)
+      if (!valid.length) {
+        cache[id] = { value: '—', pct: 0, ts: null, count: 0 }
+        continue
+      }
+      const latest = valid[valid.length - 1]
+      const prev = valid.length > 1 ? valid[valid.length - 2] : latest
+      const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value * 100) : 0
+      cache[id] = { value: latest.value, pct, ts: latest.timestamp, count: valid.length }
+    }
+    return cache
+  }, [allSnaps, simulatedTime])
 
   // Datasets that have geo coordinates
   const geoDatasets = useMemo(() => {
@@ -155,14 +204,12 @@ function MapPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-full">
 
-      {/* ── Header ────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-edge px-8 py-5 shrink-0">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">Geographic Data Map</h1>
-          <p className="mt-0.5 text-sm text-text-secondary">
-            {filteredGeo.length} location-based markers • {datasets.length} total datasets
-          </p>
-        </div>
+      {/* ── Toolbar (primary title in Navbar) ───────────── */}
+      <header className="flex shrink-0 items-center justify-between border-b border-edge px-8 py-4">
+        <p className="text-sm text-text-secondary">
+          <span className="font-mono text-text-primary">{filteredGeo.length}</span> markers on map ·{' '}
+          <span className="font-mono text-text-primary">{datasets.length}</span> datasets total
+        </p>
         <Link to="/dashboard" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover hover:text-text-primary">
           ← Dashboard
         </Link>
@@ -298,12 +345,54 @@ function MapPage() {
                 </CircleMarker>
               )
             })}
+
+            {/* Event markers (same cities — anomaly popups) */}
+            {geoEvents.map(({ ev, ds, coords }) => (
+              <CircleMarker
+                key={`evt-${ev._id}`}
+                center={[coords.lat, coords.lon]}
+                radius={5}
+                pathOptions={{
+                  color: '#fb7185',
+                  fillColor: '#fb7185',
+                  fillOpacity: 0.9,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", minWidth: 160 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#fb7185', marginBottom: 4 }}>⚡ Event</div>
+                    <div style={{ fontSize: 12, color: '#fafafa', marginBottom: 4 }}>{ds.name}</div>
+                    <div style={{ fontSize: 11, color: '#a1a1aa' }}>{ev.message}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, marginTop: 6, color: '#f59e0b' }}>
+                      {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change?.toFixed?.(1) ?? ev.percentage_change}%
+                    </div>
+                    <div style={{ fontSize: 10, color: '#52525b', marginTop: 4 }}>
+                      {new Date(ev.timestamp).toLocaleString()}
+                    </div>
+                    <Link
+                      to="/events"
+                      style={{
+                        display: 'inline-block',
+                        marginTop: 8,
+                        fontSize: 11,
+                        color: '#38bdf8',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Event log →
+                    </Link>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
           </MapContainer>
 
           {/* Floating info overlay */}
           <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 pointer-events-none">
             <span className="pointer-events-auto rounded-lg bg-bg-base/90 backdrop-blur-sm border border-edge px-3 py-2 text-xs font-semibold text-text-secondary shadow-lg">
-              🗺️ {filteredGeo.length} live markers
+              🗺️ {filteredGeo.length} datasets · {geoEvents.length} events
             </span>
           </div>
         </div>
@@ -339,10 +428,8 @@ function MapPage() {
               const cat = CAT[ds.category] || { label: ds.category, accent: '#a78bfa', icon: '•' }
               const snap = snapCache[ds._id]
               const isSelected = selectedDs === ds._id
-              const hasCoords = ds.coords || (() => {
-                const loc = ds.location?.toLowerCase().replace(/, india$/i, '').trim()
-                return loc && COORDS[loc]
-              })()
+              const locKey = ds.location?.toLowerCase().replace(/, india$/i, '').trim()
+              const hasCoords = Boolean(locKey && COORDS[locKey])
 
               return (
                 <div
