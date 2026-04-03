@@ -8,8 +8,7 @@ const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
 
-// Connect to Database
-connectDB();
+// Connect to Database later in app.listen
 
 // Middleware
 const allowedOrigins = process.env.CLIENT_URL
@@ -39,8 +38,13 @@ app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     
     try {
-        console.log('Performing initial data fetch...');
-        await fetchAll();
+        const seeded = await connectDB();
+        if (!seeded) {
+            console.log('Performing initial data fetch...');
+            await fetchAll();
+        } else {
+            console.log('Database was freshly seeded. Skipping initial fetch.');
+        }
         startScheduler();
     } catch(err) {
         console.error('Error during initial fetch:', err.message);

@@ -295,8 +295,8 @@ const seedAQI = async () => {
 // ═══════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════
-const seedData = async () => {
-    await connectDB();
+const seedData = async (shouldExit = true) => {
+    // await connectDB(); // Removed to avoid circular dependency since db.js calls this
 
     // Hard-drop all collections
     const db = mongoose.connection.db;
@@ -317,7 +317,14 @@ const seedData = async () => {
     console.log(`   🌡️  Weather: REAL (Open-Meteo Archive)`);
     console.log(`   💱 Forex: REAL today rate + 10-day drift`);
     console.log(`   🌫️  AQI: City-specific simulation (no free history API)`);
-    process.exit();
+    if (shouldExit) process.exit();
 };
 
-seedData().catch(err => { console.error('❌ Seed failed:', err.message); process.exit(1); });
+module.exports = { seedData };
+
+if (require.main === module) {
+    (async () => {
+        await connectDB();
+        await seedData();
+    })().catch(err => { console.error('❌ Seed failed:', err.message); process.exit(1); });
+}
