@@ -18,8 +18,8 @@ const connectDB = async () => {
     const localUri = 'mongodb://127.0.0.1:27017/datatime';
     
     // Environment flags
-    const SHOULD_CLEAN_DB = process.env.CLEAN_DB !== 'false'; // default: true
-    const SHOULD_SEED = process.env.SEED_DATA !== 'false';    // default: true
+    const SHOULD_CLEAN_DB = process.env.CLEAN_DB !== 'false' && !process.env.IS_SEEDING; // Skip if seeding manually
+    const SHOULD_SEED = process.env.SEED_DATA !== 'false' && !process.env.IS_SEEDING;    // Skip if seeding manually
 
     if (remoteUri) {
         try {

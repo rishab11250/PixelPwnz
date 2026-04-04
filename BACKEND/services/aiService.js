@@ -230,4 +230,73 @@ If you do NOT predict an event, return {"has_prediction": false, "confidence_lev
     }
 };
 
-module.exports = { generateEventExplanation, generateComprehensiveExplanation, isSignificantChange, generatePredictiveForecast };
+// Predictive Analytics Pipeline for Charting (Future View)
+const generateFullForecastChart = async (dataset, snapshots) => {
+    try {
+        const recentSnapshots = snapshots.slice(-48); // more context for better trends
+        const historyData = recentSnapshots.map(s => `${new Date(s.timestamp).toISOString()}: ${s.value}`).join('\n');
+        
+        const context = dataset ? 
+            `${dataset.name} (${dataset.category}) in ${dataset.location}. Unit: ${dataset.unit}.` : 
+            'Unknown Dataset.';
+
+        const prompt = `You are a data science forecaster. 
+Analyze the recent temporal data for "${dataset?.name || 'this dataset'}" and generate a realistic future forecast for the NEXT 24 HOURS.
+Return a JSON object with a "forecast" array of 8 points (one every 3 hours).
+
+Context: ${context}
+Recent History:
+${historyData}
+
+Return EXACTLY this JSON format:
+{
+  "forecast": [
+    { "timestamp": "ISO_TIMESTAMP", "value": 123.45, "is_anomaly": false },
+    ...
+  ],
+  "summary": "Short 1-sentence trend summary"
+}
+Ensure timestamps are in the future relative to the last point (${new Date(recentSnapshots[recentSnapshots.length-1]?.timestamp).toISOString()}).`;
+
+        let response = null;
+        if (process.env.GROQ_API_KEY) {
+            try {
+                const groqResponse = await axios.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    {
+                        model: 'llama-3.1-8b-instant',
+                        response_format: { type: "json_object" },
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.3
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 15000
+                    }
+                );
+                response = groqResponse.data.choices[0].message.content;
+            } catch (gErr) {
+                console.log('Groq Full Forecast failed:', gErr.message);
+            }
+        }
+        
+        if (!response) {
+            const pxResponse = await axios.post('https://text.pollinations.ai/', {
+                jsonMode: true,
+                messages: [{ role: 'user', content: prompt }]
+            });
+            response = pxResponse.data;
+        }
+
+        const jsonStr = String(response).replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(jsonStr);
+    } catch (error) {
+        console.error('Full Forecast Service Error:', error.message);
+        return { forecast: [], summary: 'Forecast unavailable' };
+    }
+};
+
+module.exports = { generateEventExplanation, generateComprehensiveExplanation, isSignificantChange, generatePredictiveForecast, generateFullForecastChart };
