@@ -6,6 +6,7 @@ import { useState } from 'react'
 const PAGE_TITLES = {
   '/dashboard': { title: 'Dashboard', desc: 'Temporal insights at a glance' },
   '/events':    { title: 'Event Log', desc: 'Track anomalies and changes' },
+  '/my-flags':  { title: 'My Flags', desc: 'Organize and tag your anomalies' },
   '/map':       { title: 'Map View', desc: 'Geographic data visualization' },
 }
 
@@ -103,6 +104,12 @@ function Navbar() {
                 <p className="text-sm font-semibold text-text-primary">{user.name}</p>
                 <p className="text-xs text-text-secondary">{user.email}</p>
               </div>
+              <button
+                onClick={() => { setShowUserMenu(false); navigate('/my-flags'); }}
+                className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border-b border-edge"
+              >
+                My Flags
+              </button>
               <button
                 onClick={handleLogout}
                 className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"

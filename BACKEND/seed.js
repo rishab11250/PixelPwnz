@@ -328,11 +328,15 @@ const seedAQI = async () => {
 const seedData = async (shouldExit = true) => {
     // await connectDB(); // Removed to avoid circular dependency since db.js calls this
 
-    // Hard-drop all collections
+    // Hard-drop all collections EXCEPT users to preserve authentication states
     const db = mongoose.connection.db;
     const cols = await db.listCollections().toArray();
-    for (const col of cols) await db.collection(col.name).drop().catch(() => {});
-    console.log('🗑️  Dropped all collections');
+    for (const col of cols) {
+        if (col.name !== 'users') {
+            await db.collection(col.name).drop().catch(() => {});
+        }
+    }
+    console.log('🗑️  Dropped all data collections (preserved users)');
 
     // Get USD-to-INR rates for crypto conversion
     const usdToInrTimeSeries = await seedForex();

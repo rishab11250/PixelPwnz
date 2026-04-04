@@ -55,7 +55,7 @@ function DatasetCard({ name, value, unit, percentageChange = 0, timestamp, accen
           className="mt-1 rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums"
           style={{ background: isPositive ? 'rgba(52,211,153,0.12)' : 'rgba(251,113,133,0.12)', color: isPositive ? '#34d399' : '#fb7185' }}
         >
-          {isPositive ? '+' : ''}{percentageChange.toFixed(1)}%
+          {isPositive ? '+' : ''}{percentageChange}%
         </span>
       </div>
 

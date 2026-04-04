@@ -217,7 +217,7 @@ function DatasetPage() {
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[
             { label: 'Current Value', val: typeof stats.current === 'number' ? stats.current.toLocaleString() : stats.current, unit: dataset.unit, accent },
-            { label: '24h Change',    val: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(2)}%`, unit: '', accent: stats.change >= 0 ? '#34d399' : '#fb7185' },
+            { label: '24h Change',    val: `${stats.change >= 0 ? '+' : ''}${stats.change}%`, unit: '', accent: stats.change >= 0 ? '#34d399' : '#fb7185' },
             { label: 'Total Snapshots', val: String(stats.total), unit: 'records', accent: '#38bdf8' },
             { label: 'Critical Events', val: String(stats.anomalies), unit: 'detected', accent: '#fb7185' },
           ].map(s => (
@@ -297,7 +297,7 @@ function DatasetPage() {
                     <p className="truncate text-xs text-text-primary">{ev.message}</p>
                   </div>
                   <span className="text-xs font-mono font-bold" style={{ color: ev.percentage_change >= 0 ? '#34d399' : '#fb7185' }}>
-                    {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change.toFixed(1)}%
+                    {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change}%
                   </span>
                   <span className="text-[10px] text-text-muted whitespace-nowrap">{timeAgo(ev.timestamp)}</span>
                 </div>

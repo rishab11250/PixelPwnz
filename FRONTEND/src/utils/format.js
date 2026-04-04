@@ -25,14 +25,14 @@ export function formatValueDisplay(v, unit, metadata = null) {
   if (unit === 'USD') {
     // For crypto, show INR by default since user wants INR values
     if (metadata?.category === 'crypto' && metadata?.inr) {
-      return `₹${Number(metadata.inr).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+      return `₹${Number(metadata.inr).toLocaleString('en-US', { maximumFractionDigits: 20 })}`
     }
-    return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+    return `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 20 })}`
   }
-  if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  if (unit === 'INR') return `₹${Number(v).toLocaleString('en-US', { maximumFractionDigits: 20 })}`
   if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit))
-    return `${Number(v).toFixed(4)} ${unit}`
-  return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
+    return `${Number(v).toLocaleString('en-US', { maximumFractionDigits: 20 })} ${unit}`
+  return `${Number(v).toLocaleString('en-US', { maximumFractionDigits: 20 })} ${unit}`
 }
 
 export function formatShortDateTime(iso) {

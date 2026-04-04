@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.jsx'
+import FlaggedEventsPage from './pages/FlaggedEventsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
@@ -80,6 +81,16 @@ function AppRoutes() {
           <PrivateRoute>
             <AppShell>
               <EventLogPage />
+            </AppShell>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/my-flags"
+        element={
+          <PrivateRoute>
+            <AppShell>
+              <FlaggedEventsPage />
             </AppShell>
           </PrivateRoute>
         }

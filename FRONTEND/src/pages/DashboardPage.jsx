@@ -346,7 +346,7 @@ function DashboardPage() {
                       {snap ? formatValueDisplay(snap.value, ds.unit, { ...snap.metadata, category: ds.category }) : '—'}
                     </span>
                     <span className="col-span-2 text-right font-mono text-xs font-bold" style={{ color: snap ? (snap.pct >= 0 ? '#34d399' : '#fb7185') : '#52525b' }}>
-                      {snap ? `${snap.pct >= 0 ? '+' : ''}${snap.pct.toFixed(2)}%` : '—'}
+                      {snap ? `${snap.pct >= 0 ? '+' : ''}${snap.pct}%` : '—'}
                     </span>
                     <span className="col-span-2 text-right text-[10px] text-text-muted">
                       {snap?.ts ? timeAgoFromNow(snap.ts) : '—'}

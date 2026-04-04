@@ -69,15 +69,15 @@ function formatValue(v, unit, category) {
   }
   
   if (category === 'weather') {
-    return `${Number(v).toFixed(1)}°C`
+    return `${Number(v)}°C`
   }
   
   if (category === 'pollution') {
-    return `${Number(v).toFixed(1)} μg/m³`
+    return `${Number(v)} μg/m³`
   }
   
   if (category === 'radiation') {
-    return `${Number(v).toFixed(1)} nSv/h`
+    return `${Number(v)} nSv/h`
   }
   
   return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
@@ -452,7 +452,7 @@ function MapPage() {
                                     fontWeight: 600,
                                     color: snap.pct >= 0 ? '#34d399' : '#fb7185',
                                   }}>
-                                    {snap.pct >= 0 ? '+' : ''}{snap.pct.toFixed(1)}%
+                                    {snap.pct >= 0 ? '+' : ''}{snap.pct}%
                                   </div>
                                 )}
                               </div>
@@ -486,7 +486,7 @@ function MapPage() {
                                 {hasWeather && (() => {
                                   const weatherData = locationData.find(d => d.category === 'weather')
                                   const snap = snapCache[weatherData?._id]
-                                  return snap ? `Temperature: ${snap.value.toFixed(1)}°C` : ''
+                                  return snap ? `Temperature: ${snap.value}°C` : ''
                                 })()}
                                 {hasWeather && hasAQI && ' • '}
                                 {hasAQI && (() => {
@@ -553,7 +553,7 @@ function MapPage() {
                     <div style={{ fontSize: 12, color: '#fafafa', marginBottom: 4 }}>{ds.name}</div>
                     <div style={{ fontSize: 11, color: '#a1a1aa' }}>{ev.message}</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, marginTop: 6, color: '#f59e0b' }}>
-                      {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change?.toFixed?.(1) ?? ev.percentage_change}%
+                      {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change}%
                     </div>
                     <div style={{ fontSize: 10, color: '#52525b', marginTop: 4 }}>
                       {new Date(ev.timestamp).toLocaleString()}
@@ -650,7 +650,7 @@ function MapPage() {
                     </p>
                     {snap?.pct != null && (
                       <p className={`font-mono text-[10px] font-bold ${snap.pct >= 0 ? 'text-emerald' : 'text-rose'}`}>
-                        {snap.pct >= 0 ? '+' : ''}{snap.pct.toFixed(2)}%
+                        {snap.pct >= 0 ? '+' : ''}{snap.pct}%
                       </p>
                     )}
                   </div>
@@ -695,7 +695,7 @@ function MapPage() {
                     <div className="text-right">
                       <p className="text-[10px] uppercase text-text-muted font-semibold tracking-wider">Change</p>
                       <p className={`font-mono text-lg font-bold ${snap.pct >= 0 ? 'text-emerald' : 'text-rose'}`}>
-                        {snap.pct >= 0 ? '+' : ''}{snap.pct.toFixed(2)}%
+                        {snap.pct >= 0 ? '+' : ''}{snap.pct}%
                       </p>
                     </div>
                   )}

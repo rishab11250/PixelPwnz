@@ -6,7 +6,16 @@ const enhanceEvent = (event, userId) => {
     const flaggedBy = doc.flagged_by || [];
     doc.flagged_count = flaggedBy.length;
     doc.user_flagged = userId ? flaggedBy.some((id) => String(id) === String(userId)) : false;
+
+    if (userId && doc.flag_notes) {
+        const note = doc.flag_notes.find((n) => String(n.user) === String(userId));
+        doc.user_note = note ? note.text : '';
+    } else {
+        doc.user_note = '';
+    }
+
     if (!userId) delete doc.flagged_by;
+    delete doc.flag_notes;
     return doc;
 };
 
@@ -42,8 +51,17 @@ const explainEvent = async (req, res) => {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ error: 'Event not found' });
 
-        const explanation = await generateEventExplanation(event);
-        res.json({ explanation });
+        if (event.ai_reason) {
+            return res.json({ event: enhanceEvent(event, req.user) });
+        }
+
+        const insights = await generateComprehensiveExplanation(event);
+        event.ai_reason = insights.reason;
+        event.ai_action = insights.action;
+        event.ai_impact = insights.impact;
+        await event.save();
+
+        res.json({ event: enhanceEvent(event, req.user) });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -63,17 +81,19 @@ const flagEvent = async (req, res) => {
             event.flagged_by.push(userId);
         }
         event.flagged_count = event.flagged_by.length;
-        await event.save();
 
         if (req.body.requestAI && !event.ai_reason) {
-            generateComprehensiveExplanation(event)
-                .then((insights) => Event.findByIdAndUpdate(event._id, {
-                    ai_reason: insights.reason,
-                    ai_action: insights.action,
-                    ai_impact: insights.impact
-                }))
-                .catch((error) => console.error('AI request failed:', error.message));
+            try {
+                const insights = await generateComprehensiveExplanation(event);
+                event.ai_reason = insights.reason;
+                event.ai_action = insights.action;
+                event.ai_impact = insights.impact;
+            } catch(e) {
+                console.error('Failed to analyze during flag:', e);
+            }
         }
+
+        await event.save();
 
         res.json({
             event: enhanceEvent(event, userId),
@@ -85,4 +105,26 @@ const flagEvent = async (req, res) => {
     }
 };
 
-module.exports = { getAllEvents, getEventsForDataset, getFlaggedEvents, explainEvent, flagEvent };
+const updateEventNote = async (req, res) => {
+    try {
+        const event = await Event.findById(req.params.id);
+        if (!event) return res.status(404).json({ error: 'Event not found' });
+
+        const userId = req.user;
+        const { text } = req.body;
+
+        const noteIndex = event.flag_notes.findIndex((n) => String(n.user) === String(userId));
+        if (noteIndex !== -1) {
+            event.flag_notes[noteIndex].text = text;
+        } else {
+            event.flag_notes.push({ user: userId, text });
+        }
+
+        await event.save();
+        res.json({ event: enhanceEvent(event, userId) });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { getAllEvents, getEventsForDataset, getFlaggedEvents, explainEvent, flagEvent, updateEventNote };

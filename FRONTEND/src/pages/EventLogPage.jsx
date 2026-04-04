@@ -56,8 +56,14 @@ function EventLogPage() {
   const [loading, setLoading] = useState(true)
   const [flagging, setFlagging] = useState(null) // Track which event is being flagged
   const [requestingAI, setRequestingAI] = useState(null) // Track which event is requesting AI
+  const [limit, setLimit] = useState(50) // Pagination limit
 
   const datasetOptions = useMemo(() => Object.values(datasets), [datasets])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setLimit(50)
+  }, [filter, datasetFilter, dateFrom, dateTo])
 
   // Fetch events + datasets on mount
   useEffect(() => {
@@ -110,19 +116,19 @@ function EventLogPage() {
     return list
   }, [events, filter, datasetFilter, dateFrom, dateTo])
 
+  // Paginated list for rendering
+  const paginated = useMemo(() => {
+    return filtered.slice(0, limit)
+  }, [filtered, limit])
+
   // Get AI explanation
   async function handleExplain(eventId) {
     console.log('Requesting explanation for event:', eventId)
-    if (explanations[eventId] && explanations[eventId] !== 'Loading…' && explanations[eventId] !== 'Explanation unavailable') {
-      console.log('Explanation already cached:', explanations[eventId])
-      return
-    }
     setExplanations(p => ({ ...p, [eventId]: 'Loading…' }))
-    console.log('Fetching explanation...')
     try {
-      const { explanation } = await api.explainEvent(eventId)
-      console.log('Got explanation:', explanation)
-      setExplanations(p => ({ ...p, [eventId]: explanation }))
+      const data = await api.explainEvent(eventId)
+      setAllEvents(prev => prev.map(ev => ev._id === eventId ? data.event : ev))
+      setExplanations(p => ({ ...p, [eventId]: null }))
     } catch (error) {
       console.error('Failed to get explanation:', error)
       setExplanations(p => ({ ...p, [eventId]: 'Explanation unavailable' }))
@@ -292,18 +298,17 @@ function EventLogPage() {
                 No events match this filter
               </motion.div>
             )}
-            {filtered.map(ev => {
+            {paginated.map(ev => {
               const sev = SEV[ev.severity] || SEV.low
               const ds = datasets[ev.dataset_id] ?? datasets[String(ev.dataset_id)]
               const isExpanded = expanded === ev._id
               const accent = dsAccent(ev.dataset_id)
-              const pctAbs = Math.abs(ev.percentage_change).toFixed(1)
+              const pctAbs = Math.abs(ev.percentage_change)
               const pctSign = ev.percentage_change >= 0 ? '+' : '-'
               return (
                 <motion.div
                   key={ev._id}
                   variants={pop}
-                  layout
                   className="border-b border-edge-subtle transition-colors hover:bg-bg-hover/40"
                 >
                   {/* Main row */}
@@ -346,8 +351,13 @@ function EventLogPage() {
                     <span className="col-span-2 text-xs text-text-muted">{formatDate(ev.timestamp)}</span>
                     <span className="col-span-2 flex items-center gap-2">
                       {ev.flagged_count > 0 && (
-                        <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-amber-500/10 text-amber-600">
+                        <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-amber-500/10 text-amber-600" title={`${ev.flagged_count} user flags`}>
                           🚩 {ev.flagged_count}
+                        </span>
+                      )}
+                      {(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-emerald-500/10 text-emerald-400" title="Analyzed by AI Context Engine">
+                          ⚡ AI
                         </span>
                       )}
                     </span>
@@ -400,8 +410,8 @@ function EventLogPage() {
                             <BeforeAfterChart datasetId={ev.dataset_id} eventTime={ev.timestamp} color={sev.color} />
                           </div>
 
-                          {/* AI Insights for Significant Changes */}
-                          {ev.is_significant && (ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                          {/* AI Insights Block */}
+                          {(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
                             <div className="mt-3 border-t border-edge-subtle pt-3">
                               <span className="flex items-center gap-2 text-[10px] uppercase text-text-muted font-semibold">
                                 <span>⚡</span> Significant Change Analysis
@@ -444,7 +454,7 @@ function EventLogPage() {
                               >
                                 🚩 {flagging === ev._id ? 'Flagging...' : 'Flag Event'}
                               </Button>
-                              {!ev.is_significant && (
+                              {!(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -458,9 +468,9 @@ function EventLogPage() {
                             </div>
                           )}
 
-                          {/* Legacy AI Explanation (for non-significant changes) */}
-                          {!ev.is_significant && (
-                            <div className="card-flat px-3 py-2">
+                          {/* Standard AI Explanation Request Block */}
+                          {!(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                            <div className="card-flat px-3 py-2 mt-3">
                               <span className="text-[10px] uppercase text-text-muted">AI Analysis</span>
                               <div className="mt-1 text-xs text-text-secondary">
                                 {explanations[ev._id] === 'Loading…' && (
@@ -469,11 +479,21 @@ function EventLogPage() {
                                     <span>Analyzing event patterns...</span>
                                   </div>
                                 )}
-                                {explanations[ev._id] && explanations[ev._id] !== 'Loading…' && (
-                                  <p>{explanations[ev._id]}</p>
+                                {explanations[ev._id] === 'Explanation unavailable' && (
+                                  <div className="text-rose-500">Failed to analyze. Please try again.</div>
                                 )}
                                 {!explanations[ev._id] && (
-                                  <p>Click to load explanation…</p>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => { e.stopPropagation(); handleExplain(ev._id); }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <span>🤖</span> Analyze Anomaly
+                                  </Button>
+                                )}
+                                {explanations[ev._id] && explanations[ev._id] !== 'Loading…' && explanations[ev._id] !== 'Explanation unavailable' && (
+                                  <p>{explanations[ev._id]}</p>
                                 )}
                               </div>
                             </div>
@@ -486,6 +506,19 @@ function EventLogPage() {
               )
             })}
           </AnimatePresence>
+
+          {/* Load More Button */}
+          {filtered.length > limit && (
+            <div className="flex justify-center p-4 border-t border-edge-subtle">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setLimit(p => p + 50)}
+              >
+                Load More ({filtered.length - limit} remaining)
+              </Button>
+            </div>
+          )}
         </motion.div>
       </div>
     </motion.div>
