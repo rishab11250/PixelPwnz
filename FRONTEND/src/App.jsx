@@ -6,8 +6,6 @@ import EventLogPage from './pages/EventLogPage.jsx'
 import MapPage from './pages/MapPage.jsx'
 import Sidebar from './components/layout/Sidebar.jsx'
 import Navbar from './components/layout/Navbar.jsx'
-import './App.css'
-
 import { TimeMachineProvider } from './contexts/TimeMachineContext.jsx'
 import TimelineSlider from './components/layout/TimelineSlider.jsx'
 

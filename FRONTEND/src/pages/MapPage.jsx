@@ -2,51 +2,118 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { api } from '../lib/api.js'
 import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
 
-/* ── Category config ──────────────────────────────── */
+/* ── Geographic Category config ──────────────────────── */
 const CAT = {
-  crypto:      { label: 'Crypto',      accent: '#f59e0b', bg: 'rgba(245,158,11,0.15)', icon: '📈' },
-  air_quality: { label: 'Air Quality', accent: '#fb7185', bg: 'rgba(251,113,133,0.15)', icon: '🌫️' },
-  weather:     { label: 'Weather',     accent: '#38bdf8', bg: 'rgba(56,189,248,0.15)',  icon: '🌡️' },
-  forex:       { label: 'Forex',       accent: '#a78bfa', bg: 'rgba(167,139,250,0.15)', icon: '💱' },
+  air_quality: { label: 'Air Quality', accent: '#fb7185', bg: 'rgba(251,113,133,0.15)', icon: '🌫️', unit: 'AQI', threshold: { good: 50, moderate: 100, poor: 150, very_poor: 200, severe: 300 } },
+  weather:     { label: 'Weather', accent: '#38bdf8', bg: 'rgba(56,189,248,0.15)',  icon: '�️', unit: '°C', threshold: { cold: 10, mild: 20, warm: 30, hot: 40 } },
+  pollution:   { label: 'Pollution', accent: '#a78bfa', bg: 'rgba(167,139,250,0.15)', icon: '�', unit: 'μg/m³', threshold: { low: 50, medium: 100, high: 150 } },
+  radiation:   { label: 'Radiation', accent: '#f59e0b', bg: 'rgba(245,158,11,0.15)', icon: '☢️', unit: 'nSv/h', threshold: { normal: 100, elevated: 200, high: 500 } },
 }
 
-/* ── Known coordinates for data sources ───────────── */
+/* ── Indian cities coordinates ─────────────────────── */
 const COORDS = {
-  'delhi':     { lat: 28.6139, lon: 77.2090 },
-  'mumbai':    { lat: 19.0760, lon: 72.8777 },
-  'kolkata':   { lat: 22.5726, lon: 88.3639 },
-  'chennai':   { lat: 13.0827, lon: 80.2707 },
-  'bangalore': { lat: 12.9716, lon: 77.5946 },
-  'hyderabad': { lat: 17.3850, lon: 78.4867 },
-  'ahmedabad': { lat: 23.0225, lon: 72.5714 },
-  'pune':      { lat: 18.5204, lon: 73.8567 },
-  'jaipur':    { lat: 26.9124, lon: 75.7873 },
-  'lucknow':   { lat: 26.8467, lon: 80.9462 },
-  'india':     { lat: 20.5937, lon: 78.9629 },
-  'new york':  { lat: 40.7128, lon: -74.0060 },
-  'new-york':  { lat: 40.7128, lon: -74.0060 },
-  'london':    { lat: 51.5074, lon: -0.1278 },
-  'tokyo':     { lat: 35.6762, lon: 139.6503 },
-  'dubai':     { lat: 25.2048, lon: 55.2708 },
-  'sydney':    { lat: -33.8688, lon: 151.2093 },
-  'singapore': { lat: 1.3521,  lon: 103.8198 },
-  'paris':     { lat: 48.8566, lon: 2.3522 },
-  'beijing':   { lat: 39.9042, lon: 116.4074 },
-  'los angeles':{ lat: 34.0522, lon: -118.2437 },
-  'chicago':   { lat: 41.8781, lon: -87.6298 },
+  'delhi':       { lat: 28.6139, lon: 77.2090, population: '32M', state: 'Delhi' },
+  'mumbai':      { lat: 19.0760, lon: 72.8777, population: '20M', state: 'Maharashtra' },
+  'kolkata':     { lat: 22.5726, lon: 88.3639, population: '15M', state: 'West Bengal' },
+  'chennai':     { lat: 13.0827, lon: 80.2707, population: '11M', state: 'Tamil Nadu' },
+  'bangalore':   { lat: 12.9716, lon: 77.5946, population: '13M', state: 'Karnataka' },
+  'hyderabad':   { lat: 17.3850, lon: 78.4867, population: '10M', state: 'Telangana' },
+  'ahmedabad':   { lat: 23.0225, lon: 72.5714, population: '8M', state: 'Gujarat' },
+  'pune':        { lat: 18.5204, lon: 73.8567, population: '7M', state: 'Maharashtra' },
+  'jaipur':      { lat: 26.9124, lon: 75.7873, population: '4M', state: 'Rajasthan' },
+  'lucknow':     { lat: 26.8467, lon: 80.9462, population: '3M', state: 'Uttar Pradesh' },
+  'surat':       { lat: 21.1702, lon: 72.8311, population: '7M', state: 'Gujarat' },
+  'kanpur':      { lat: 26.4499, lon: 80.3319, population: '3M', state: 'Uttar Pradesh' },
+  'nagpur':      { lat: 21.1458, lon: 79.0882, population: '3M', state: 'Maharashtra' },
+  'indore':      { lat: 22.7196, lon: 75.8577, population: '3M', state: 'Madhya Pradesh' },
+  'thane':       { lat: 19.2183, lon: 72.9781, population: '2M', state: 'Maharashtra' },
+  'bhopal':      { lat: 23.2599, lon: 77.4127, population: '3M', state: 'Madhya Pradesh' },
+  'visakhapatnam':{ lat: 17.6868, lon: 83.2185, population: '2M', state: 'Andhra Pradesh' },
+  'pimpri':      { lat: 18.6298, lon: 73.8092, population: '2M', state: 'Maharashtra' },
+  'patna':       { lat: 25.5941, lon: 85.1376, population: '3M', state: 'Bihar' },
+  'vadodara':    { lat: 22.3072, lon: 73.1812, population: '2M', state: 'Gujarat' },
+  'ghaziabad':   { lat: 28.6692, lon: 77.4538, population: '3M', state: 'Uttar Pradesh' },
+  'ludhiana':    { lat: 30.9010, lon: 75.8573, population: '2M', state: 'Punjab' },
+  'agra':        { lat: 27.1767, lon: 78.0081, population: '2M', state: 'Uttar Pradesh' },
+  'nashik':      { lat: 19.9975, lon: 73.7898, population: '2M', state: 'Maharashtra' },
+  'faridabad':   { lat: 28.4089, lon: 77.3178, population: '2M', state: 'Haryana' },
+  'meerut':      { lat: 28.9845, lon: 77.7064, population: '2M', state: 'Uttar Pradesh' },
+  'rajkot':      { lat: 22.3039, lon: 70.8022, population: '2M', state: 'Gujarat' },
+  'kalyan':      { lat: 19.2403, lon: 73.1305, population: '2M', state: 'Maharashtra' },
+  'vasai':       { lat: 19.4912, lon: 72.8397, population: '1M', state: 'Maharashtra' },
+  'varanasi':    { lat: 25.3176, lon: 82.9739, population: '4M', state: 'Uttar Pradesh' },
+  'srinagar':    { lat: 34.0837, lon: 74.7973, population: '2M', state: 'Jammu & Kashmir' },
+  'dhanbad':     { lat: 23.7957, lon: 86.4304, population: '1M', state: 'Jharkhand' },
+  'jodhpur':     { lat: 26.2389, lon: 73.0243, population: '2M', state: 'Rajasthan' },
+  'kozhikode':   { lat: 11.2588, lon: 75.7804, population: '2M', state: 'Kerala' },
+  'india':       { lat: 20.5937, lon: 78.9629, population: '1.4B', state: 'Republic of India' },
 }
 
-/* ── Helpers ──────────────────────────────────────── */
-function formatValue(v, unit) {
+/* ── Geographic-specific helpers ───────────────────────── */
+function formatValue(v, unit, category) {
   if (v == null) return '—'
-  if (unit === 'USD') return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-  if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-  if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit)) return `${Number(v).toFixed(4)} ${unit}`
+  
+  // Geographic data formatting
+  if (category === 'air_quality') {
+    const aqi = Number(v)
+    if (aqi <= 50) return `${aqi} AQI (Good)`
+    if (aqi <= 100) return `${aqi} AQI (Moderate)`
+    if (aqi <= 150) return `${aqi} AQI (Poor)`
+    if (aqi <= 200) return `${aqi} AQI (Very Poor)`
+    return `${aqi} AQI (Severe)`
+  }
+  
+  if (category === 'weather') {
+    return `${Number(v).toFixed(1)}°C`
+  }
+  
+  if (category === 'pollution') {
+    return `${Number(v).toFixed(1)} μg/m³`
+  }
+  
+  if (category === 'radiation') {
+    return `${Number(v).toFixed(1)} nSv/h`
+  }
+  
   return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
+}
+
+function getSeverityColor(value, category) {
+  const cat = CAT[category]
+  if (!cat || !cat.threshold) return cat.accent
+  
+  const thresholds = cat.threshold
+  const keys = Object.keys(thresholds)
+  
+  for (let i = keys.length - 1; i >= 0; i--) {
+    if (value >= thresholds[keys[i]]) {
+      if (category === 'air_quality') {
+        if (i >= 3) return '#dc2626' // Severe - red
+        if (i >= 2) return '#f97316' // Very Poor - orange
+        if (i >= 1) return '#f59e0b' // Poor - amber
+        return '#84cc16' // Good/Moderate - lime
+      }
+      if (category === 'weather') {
+        if (value >= 40) return '#dc2626' // Hot - red
+        if (value >= 30) return '#f97316' // Warm - orange
+        if (value >= 20) return '#38bdf8' // Mild - blue
+        return '#06b6d4' // Cold - cyan
+      }
+      return cat.accent
+    }
+  }
+  
+  return cat.accent
+}
+
+function getCityInfo(location) {
+  const cityKey = location?.toLowerCase().replace(/, india$/i, '').trim()
+  return COORDS[cityKey] || null
 }
 
 function timeAgo(iso) {
@@ -60,11 +127,24 @@ function timeAgo(iso) {
   return `${Math.floor(h / 24)}d ago`
 }
 
+/* ── Map bounds restrictor ─────────────────────────── */
+function MapBounds() {
+  const map = useMap()
+  useEffect(() => {
+    const indiaBounds = L.latLngBounds([[6, 68], [38, 97]])
+    map.setMaxBounds(indiaBounds)
+    map.setMinZoom(4)
+    map.setMaxZoom(10)
+    map.fitBounds(indiaBounds)
+  }, [map])
+  return null
+}
+
 /* ── Map zoom/fly component ──────────────────────── */
 function FlyToMarker({ center }) {
   const map = useMap()
   useEffect(() => {
-    if (center) map.flyTo(center, 8, { duration: 1.2 })
+    if (center) map.flyTo(center, 7, { duration: 1.2 })
   }, [center, map])
   return null
 }
@@ -85,8 +165,11 @@ function MapPage() {
     async function load() {
       try {
         const [ds, evs] = await Promise.all([api.getDatasets(), api.getEvents()])
-        setDatasets(ds)
-        setMapEvents(evs)
+        // Filter only geographic datasets
+        const geographicCategories = ['air_quality', 'weather', 'pollution', 'radiation']
+        const filteredDs = ds.filter(d => geographicCategories.includes(d.category))
+        setDatasets(filteredDs)
+        setMapEvents(evs.filter(e => geographicCategories.includes(e.dataset_id?.category)))
         setLoading(false)
       } catch (err) {
         console.error('Map load failed:', err)
@@ -265,13 +348,18 @@ function MapPage() {
         <div className="flex-1 relative">
           <MapContainer
             center={[22, 78]}
-            zoom={4}
-            minZoom={2}
-            maxZoom={16}
+            zoom={5}
+            minZoom={4}
+            maxZoom={10}
             zoomControl={false}
             className="h-full w-full"
             style={{ background: '#09090b' }}
+            bounds={[[6, 68], [38, 97]]}
+            maxBounds={[[6, 68], [38, 97]]}
+            maxBoundsViscosity={1.0}
           >
+            {/* Map bounds restrictor */}
+            <MapBounds />
             {/* CartoDB Dark Matter tiles */}
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -286,14 +374,17 @@ function MapPage() {
               const cat = CAT[ds.category] || { accent: '#a78bfa' }
               const snap = snapCache[ds._id]
               const isSelected = selectedDs === ds._id
+              const cityInfo = getCityInfo(ds.location)
+              const severityColor = snap ? getSeverityColor(snap.value, ds.category) : cat.accent
+              
               return (
                 <CircleMarker
                   key={ds._id}
                   center={[ds.coords.lat, ds.coords.lon]}
                   radius={isSelected ? 10 : 7}
                   pathOptions={{
-                    color: cat.accent,
-                    fillColor: cat.accent,
+                    color: severityColor,
+                    fillColor: severityColor,
                     fillOpacity: isSelected ? 0.9 : 0.6,
                     weight: isSelected ? 3 : 2,
                     opacity: 0.8,
@@ -306,40 +397,137 @@ function MapPage() {
                   }}
                 >
                   <Popup>
-                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", minWidth: 180 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap: 8, marginBottom: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.accent, display: 'inline-block' }} />
-                        <strong style={{ fontSize: 13, color: '#fafafa' }}>{ds.name}</strong>
+                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", minWidth: 280 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: severityColor, display: 'inline-block' }} />
+                        <strong style={{ fontSize: 14, color: '#fafafa' }}>{ds.name}</strong>
                       </div>
-                      <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, color: '#a1a1aa', marginBottom: 6 }}>
                         {ds.source_api} • {ds.location}
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: cat.accent }}>
-                          {snap ? formatValue(snap.value, ds.unit) : '—'}
-                        </span>
-                        {snap?.pct != null && (
-                          <span style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: snap.pct >= 0 ? '#34d399' : '#fb7185',
-                          }}>
-                            {snap.pct >= 0 ? '+' : ''}{snap.pct.toFixed(2)}%
-                          </span>
-                        )}
-                      </div>
-                      {snap?.ts && (
-                        <div style={{ fontSize: 10, color: '#52525b', marginTop: 4 }}>
-                          Updated {timeAgo(snap.ts)} • {snap.count} snapshots
+                      {cityInfo && (
+                        <div style={{ fontSize: 10, color: '#52525b', marginBottom: 8 }}>
+                          📍 {cityInfo.state} • Pop: {cityInfo.population}
                         </div>
                       )}
-                      <Link
-                        to={`/dataset/${ds._id}`}
-                        style={{ display:'inline-block', marginTop: 8, fontSize: 11, color: cat.accent, textDecoration: 'none', fontWeight: 600 }}
-                      >
-                        View Details →
-                      </Link>
+                      
+                      {/* Environmental Data Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        {(() => {
+                          const locationData = datasets.filter(d => {
+                            const loc = d.location?.toLowerCase().replace(/, india$/i, '').trim()
+                            return loc === ds.location?.toLowerCase().replace(/, india$/i, '').trim()
+                          })
+                          
+                          return locationData.map(dataset => {
+                            const snap = snapCache[dataset._id]
+                            const cat = CAT[dataset.category]
+                            const value = snap ? getSeverityColor(snap.value, dataset.category) : cat.accent
+                            
+                            return (
+                              <div key={dataset._id} style={{ 
+                                background: 'rgba(255,255,255,0.02)', 
+                                padding: 6, 
+                                borderRadius: 6,
+                                border: `1px solid ${value}20`
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                                  <span style={{ fontSize: 12 }}>{cat.icon}</span>
+                                  <span style={{ fontSize: 10, color: '#a1a1aa', fontWeight: 600 }}>
+                                    {cat.label}
+                                  </span>
+                                </div>
+                                <div style={{ 
+                                  fontFamily: "'JetBrains Mono', monospace", 
+                                  fontSize: 12, 
+                                  fontWeight: 700, 
+                                  color: value 
+                                }}>
+                                  {snap ? formatValue(snap.value, dataset.unit, dataset.category) : '—'}
+                                </div>
+                                {snap?.pct != null && (
+                                  <div style={{ 
+                                    fontFamily: "'JetBrains Mono', monospace", 
+                                    fontSize: 9, 
+                                    fontWeight: 600,
+                                    color: snap.pct >= 0 ? '#34d399' : '#fb7185',
+                                  }}>
+                                    {snap.pct >= 0 ? '+' : ''}{snap.pct.toFixed(1)}%
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })
+                        })()}
+                      </div>
+                      
+                      {/* Additional Environmental Info */}
+                      {(() => {
+                        const locationData = datasets.filter(d => {
+                          const loc = d.location?.toLowerCase().replace(/, india$/i, '').trim()
+                          return loc === ds.location?.toLowerCase().replace(/, india$/i, '').trim()
+                        })
+                        
+                        const hasWeather = locationData.some(d => d.category === 'weather')
+                        const hasAQI = locationData.some(d => d.category === 'air_quality')
+                        
+                        if (hasWeather || hasAQI) {
+                          return (
+                            <div style={{ 
+                              background: 'rgba(255,255,255,0.03)', 
+                              padding: 8, 
+                              borderRadius: 6,
+                              marginTop: 6 
+                            }}>
+                              <div style={{ fontSize: 10, color: '#52525b', marginBottom: 4, fontWeight: 600 }}>
+                                🌍 Environmental Summary
+                              </div>
+                              <div style={{ fontSize: 9, color: '#71717a', lineHeight: 1.4 }}>
+                                {hasWeather && (() => {
+                                  const weatherData = locationData.find(d => d.category === 'weather')
+                                  const snap = snapCache[weatherData?._id]
+                                  return snap ? `Temperature: ${snap.value.toFixed(1)}°C` : ''
+                                })()}
+                                {hasWeather && hasAQI && ' • '}
+                                {hasAQI && (() => {
+                                  const aqiData = locationData.find(d => d.category === 'air_quality')
+                                  const snap = snapCache[aqiData?._id]
+                                  if (snap) {
+                                    const aqi = snap.value
+                                    let status = 'Good'
+                                    if (aqi > 300) status = 'Severe'
+                                    else if (aqi > 200) status = 'Very Poor'
+                                    else if (aqi > 150) status = 'Poor'
+                                    else if (aqi > 100) status = 'Moderate'
+                                    return `Air Quality: ${status}`
+                                  }
+                                  return ''
+                                })()}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
+                      
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #27272a' }}>
+                        <Link
+                          to={`/dataset/${ds._id}`}
+                          style={{ 
+                            display:'inline-block', 
+                            fontSize: 11, 
+                            color: severityColor, 
+                            textDecoration: 'none', 
+                            fontWeight: 600,
+                            background: `${severityColor}10`,
+                            padding: '4px 8px',
+                            borderRadius: 4,
+                            border: `1px solid ${severityColor}30`
+                          }}
+                        >
+                          View Full Details →
+                        </Link>
+                      </div>
                     </div>
                   </Popup>
                 </CircleMarker>
@@ -390,7 +578,7 @@ function MapPage() {
           </MapContainer>
 
           {/* Floating info overlay */}
-          <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 pointer-events-none">
+          <div className="absolute top-4 left-4 z-50 flex flex-col gap-2 pointer-events-none">
             <span className="pointer-events-auto rounded-lg bg-bg-base/90 backdrop-blur-sm border border-edge px-3 py-2 text-xs font-semibold text-text-secondary shadow-lg">
               🗺️ {filteredGeo.length} datasets · {geoEvents.length} events
             </span>
