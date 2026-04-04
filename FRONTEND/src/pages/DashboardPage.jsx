@@ -208,18 +208,19 @@ function DashboardPage() {
       {/* ── Page intro + live activity (header rail) ───────────── */}
       <header className="border-b border-edge px-8 py-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-bold tracking-tight">{getGreeting()}</h1>
             <p className="mt-0.5 text-sm text-text-secondary">
               Tracking <span className="font-mono text-text-primary">{stats.datasets}</span> datasets across {stats.categories} categories
             </p>
           </div>
-          <div className="w-full shrink-0 lg:max-w-md xl:max-w-lg">
+          <div className="relative shrink-0 lg:max-w-md xl:max-w-lg">
+            <div className="absolute top-0 right-0 z-50 w-full lg:w-auto lg:min-w-[320px]">
             <ActivitiesCard
               headerIcon={<span className="text-lg">⚡</span>}
               title="Recent activity"
               subtitle={`${events.length} events in scrubber range`}
-              initialOpen={events.length > 0}
+              initialOpen={false}
               headerAction={(
                 <Link
                   to="/events"
@@ -239,6 +240,7 @@ function DashboardPage() {
                 time: timeAgoFromNow(ev.timestamp),
               }))}
             />
+            </div>
           </div>
         </div>
       </header>
@@ -405,7 +407,7 @@ function DashboardPage() {
                     onEventClick={() => navigate('/events')}
                   />
                 ) : (
-                  <div className="flex h-[260px] items-center justify-center text-sm text-text-muted">
+                  <div className="h-65 items-center justify-center text-sm text-text-muted">
                     No snapshot data in this range
                   </div>
                 )}
