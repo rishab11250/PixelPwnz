@@ -1,28 +1,16 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   ComposedChart,
   Area,
   Line,
   XAxis,
   YAxis,
-  Tooltip,
   ResponsiveContainer,
   CartesianGrid,
   Scatter,
 } from 'recharts'
 
 const SEV_COLOR = { high: '#fb7185', medium: '#f59e0b', low: '#38bdf8' }
-
-function ChartTip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  const p = payload[0]
-  return (
-    <div className="card px-3 py-2 text-xs shadow-xl">
-      <p className="text-text-muted">{label ?? p?.payload?.fullLabel}</p>
-      <p className="font-mono font-bold text-amber">{p?.value}</p>
-    </div>
-  )
-}
 
 /**
  * Line + area timeline with optional event markers (clickable dots).
@@ -37,6 +25,29 @@ export default function TimelineChart({
   onEventClick,
   gradientId = 'tlGrad',
 }) {
+  const [mousePos, setMousePos] = useState(null)
+  const [hoveredData, setHoveredData] = useState(null)
+
+  const handleMouseMove = useCallback((e) => {
+    if (!e) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    // Find the closest data point
+    const chartWidth = rect.width - 64 // Account for margins
+    const dataIndex = Math.floor((x / chartWidth) * data.length)
+    const closestData = data[Math.min(dataIndex, data.length - 1)]
+    
+    setMousePos({ x, y })
+    setHoveredData(closestData)
+  }, [data])
+
+  const handleMouseLeave = useCallback(() => {
+    setMousePos(null)
+    setHoveredData(null)
+  }, [])
+
   const scatter = useMemo(() => {
     if (!data.length || !events.length) return []
     return events.map((ev) => {
@@ -67,66 +78,92 @@ export default function TimelineChart({
   if (!data.length) return null
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity={0.15} />
-            <stop offset="100%" stopColor={accent} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
-        <XAxis
-          dataKey="label"
-          tick={{ fill: '#52525b', fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          interval={Math.max(1, Math.floor(data.length / 10))}
-        />
-        <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <Tooltip content={<ChartTip />} cursor={{ stroke: 'rgba(255,255,255,0.06)' }} />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke="none"
-          fill={`url(#${gradientId})`}
-          isAnimationActive={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={accent}
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 4, fill: accent, stroke: '#09090b', strokeWidth: 2 }}
-          isAnimationActive={false}
-        />
-        {scatter.length > 0 && (
-          <Scatter
-            data={scatter}
-            shape={(props) => {
-              const { cx, cy, payload } = props
-              if (cx == null || cy == null) return null
-              return (
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={payload.z / 2 + 2}
-                  fill={payload.fill}
-                  stroke="#09090b"
-                  strokeWidth={2}
-                  style={{ cursor: onEventClick ? 'pointer' : 'default' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onEventClick?.(payload.ev)
-                  }}
-                />
-              )
-            }}
+    <div className="relative" style={{ height }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity={0.15} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fill: '#52525b', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            interval={Math.max(1, Math.floor(data.length / 10))}
+          />
+          <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="none"
+            fill={`url(#${gradientId})`}
             isAnimationActive={false}
           />
-        )}
-      </ComposedChart>
-    </ResponsiveContainer>
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={accent}
+            strokeWidth={2}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+          {scatter.length > 0 && (
+            <Scatter
+              data={scatter}
+              shape={(props) => {
+                const { cx, cy, payload } = props
+                if (cx == null || cy == null) return null
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={payload.z / 2 + 2}
+                    fill={payload.fill}
+                    stroke="#09090b"
+                    strokeWidth={2}
+                    style={{ cursor: onEventClick ? 'pointer' : 'default' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onEventClick?.(payload.ev)
+                    }}
+                  />
+                )
+              }}
+              isAnimationActive={false}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+      
+      {/* Custom tooltip overlay */}
+      {mousePos && hoveredData && (
+        <div
+          className="card px-3 py-2 text-xs shadow-xl pointer-events-none"
+          style={{
+            position: 'absolute',
+            left: mousePos.x,
+            top: mousePos.y - 50,
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+          }}
+        >
+          <p className="text-text-muted">{hoveredData.fullLabel || hoveredData.label}</p>
+          <p className="font-mono font-bold text-amber">{hoveredData.value}</p>
+        </div>
+      )}
+      
+      {/* Mouse tracking overlay */}
+      <div
+        className="absolute inset-0"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{ pointerEvents: 'auto' }}
+      />
+    </div>
   )
 }
