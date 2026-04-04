@@ -106,9 +106,9 @@ const seedForex = async () => {
     const todayRates = response.data.rates;
     console.log(`  Current rates: 1 INR = $${todayRates.USD} USD, ¥${todayRates.JPY} JPY`);
 
-    // Build hourly forex snapshots going 10 days back from today's rate
+    // Build hourly forex snapshots going 30 days back from today's rate
     // Apply small realistic daily drift (±0.3% per day, mean-reverting)
-    const totalHours = 10 * 24;
+    const totalHours = 30 * 24; // Cover full range up to END_DATE
     const usdToInrTimeSeries = []; // used later for crypto conversion
 
     for (const pair of FOREX_PAIRS) {
@@ -137,13 +137,14 @@ const seedForex = async () => {
         }));
 
         await Snapshot.insertMany(snapshotDocs);
+        const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs); // Distribute events historically
 
         if (pair.code === 'USD') {
             // Save INR-per-USD for crypto seeding
             usdToInrTimeSeries.push(...hourlyRates.map(r => parseFloat((1 / r).toFixed(4))));
         }
 
-        console.log(`  ✅ INR/${pair.code}: real rate ${todayRate}, ${totalHours} hourly points`);
+        console.log(`  ✅ INR/${pair.code}: real rate ${todayRate}, ${totalHours} hourly points | events: ${eventsCreated}`);
     }
 
     return usdToInrTimeSeries; // 240-element array
@@ -279,7 +280,7 @@ const seedWeather = async () => {
 const seedAQI = async () => {
     console.log('\n🌫️  Step 4: AQI (city-specific realistic simulation)...');
 
-    const totalHours = 10 * 24;
+    const totalHours = 30 * 24; // 30 days history up to today
 
     for (const city of INDIAN_CITIES) {
         const { base, min, max } = city.aqi;
@@ -371,6 +372,7 @@ module.exports = { seedData };
 
 if (require.main === module) {
     (async () => {
+        process.env.IS_SEEDING = 'true';
         await connectDB();
         await seedData();
     })().catch(err => { console.error('❌ Seed failed:', err.message); process.exit(1); });

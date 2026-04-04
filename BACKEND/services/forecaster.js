@@ -44,13 +44,16 @@ const runForecastCycle = async () => {
                 
                 const targetDate = new Date(Date.now() + (forecast.hours_until_occurrence || 12) * 60 * 60 * 1000);
                 
+                // Slightly distribute timestamps (by 1ms each) to avoid perfect bunching
+                const uniqueTimestamp = new Date(Date.now() + datasets.indexOf(ds));
+
                 await Event.create({
                     dataset_id: ds._id,
                     type: 'prediction',
                     percentage_change: forecast.type === 'drop' ? -pct : pct,
                     previous_value: currentSnap.value,
                     current_value: projectedVal,
-                    timestamp: new Date(),
+                    timestamp: uniqueTimestamp,
                     target_timestamp: targetDate,
                     message: `Forecast: A ${pct.toFixed(2)}% ${forecast.type} is predicted in roughly ${forecast.hours_until_occurrence || 12} hours.`,
                     severity: forecast.confidence_level >= 90 ? 'high' : 'medium',
