@@ -95,11 +95,10 @@ export const api = {
   // ====================
   fetchNow: (datasetId) =>
     request(`/fetch-now/${datasetId}`, { method: 'POST' }),
-};
 
   // ====================
   // Exports
   // ====================
   exportCSV: (datasetId) => `${API}/datasets/${datasetId}/export`,
-}
+};
 
