@@ -125,7 +125,7 @@ export default function TimelineChart({
             tick={{ fill: '#71717a', fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }}
             axisLine={{ stroke: 'rgba(255,255,255,0.05)', strokeWidth: 1 }}
             tickLine={false}
-            interval={Math.max(1, Math.floor(data.length / 8))}
+            minTickGap={50}
           />
           
           {/* Enhanced Y-axis */}
@@ -134,10 +134,7 @@ export default function TimelineChart({
             tick={{ fill: '#71717a', fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }}
             axisLine={{ stroke: 'rgba(255,255,255,0.05)', strokeWidth: 1 }}
             tickLine={false}
-            tickFormatter={(value) => {
-              if (value >= 1000) return `${(value / 1000).toFixed(1)}k`
-              return value.toFixed(0)
-            }}
+            tickFormatter={(value) => value.toString()}
           />
           
           {/* Enhanced area with better gradient */}
@@ -233,12 +230,7 @@ export default function TimelineChart({
             {hoveredData.fullLabel || hoveredData.label}
           </div>
           <div className="font-mono font-bold" style={{ color: accent, fontSize: '12px' }}>
-            {typeof hoveredData.value === 'number' 
-              ? hoveredData.value >= 1000 
-                ? `$${(hoveredData.value / 1000).toFixed(2)}k`
-                : hoveredData.value.toFixed(2)
-              : hoveredData.value
-            }
+            {hoveredData.value}
           </div>
         </div>
       )}

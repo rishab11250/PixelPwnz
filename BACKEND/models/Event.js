@@ -15,7 +15,11 @@ const eventSchema = new mongoose.Schema({
     ai_action: { type: String, default: null },
     ai_impact: { type: String, default: null },
     flagged_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    flagged_count: { type: Number, default: 0 }
+    flagged_count: { type: Number, default: 0 },
+    flag_notes: [{
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        text: String
+    }]
 });
 
 eventSchema.index({ dataset_id: 1, timestamp: -1 });

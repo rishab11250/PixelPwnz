@@ -85,6 +85,12 @@ export const api = {
       body: JSON.stringify({ requestAI }),
     }),
 
+  updateEventNote: (eventId, text) =>
+    request(`/events/${eventId}/note`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
   // ====================
   // Manual operations
   // ====================

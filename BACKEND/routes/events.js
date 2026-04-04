@@ -5,13 +5,15 @@ const {
     getEventsForDataset,
     getFlaggedEvents,
     explainEvent,
-    flagEvent
+    flagEvent,
+    updateEventNote
 } = require('../controllers/eventController');
 const { requireAuth, optionalAuth } = require('../middlewares/authMiddleware');
 
 router.get('/events', optionalAuth, getAllEvents);
 router.get('/events/flagged', requireAuth, getFlaggedEvents);
 router.post('/events/:id/flag', requireAuth, flagEvent);
+router.post('/events/:id/note', requireAuth, updateEventNote);
 router.get('/events/:id/explain', optionalAuth, explainEvent);
 router.get('/datasets/:id/events', optionalAuth, getEventsForDataset);
 

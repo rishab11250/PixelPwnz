@@ -48,22 +48,6 @@ const detectChange = async (snapshot) => {
             is_significant: significant
         });
 
-        // If significant, generate AI insights asynchronously (don't block)
-        if (significant) {
-            generateComprehensiveExplanation(event)
-                .then(insights => {
-                    // Update the event with AI insights
-                    return Event.findByIdAndUpdate(event._id, {
-                        ai_reason: insights.reason,
-                        ai_action: insights.action,
-                        ai_impact: insights.impact
-                    });
-                })
-                .catch(err => {
-                    console.error('Failed to generate AI insights:', err.message);
-                    // Event still exists, just without AI insights
-                });
-        }
     }
 };
 
