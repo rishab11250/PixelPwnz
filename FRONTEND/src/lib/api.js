@@ -28,18 +28,16 @@ export const api = {
   // Authentication
   // ====================
   signup: (name, email, password) =>
-    fetch(`${API}/auth/signup`, {
+    request('/auth/signup', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
-    }).then(r => r.json()),
+    }),
 
   login: (email, password) =>
-    fetch(`${API}/auth/login`, {
+    request('/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
-    }).then(r => r.json()),
+    }),
 
   getCurrentUser: () => request('/auth/me'),
 
@@ -96,7 +94,8 @@ export const api = {
   // Manual operations
   // ====================
   fetchNow: (datasetId) =>
-    fetch(`${API}/fetch-now/${datasetId}`, { method: 'POST' }).then(r => r.json()),
+    request(`/fetch-now/${datasetId}`, { method: 'POST' }),
+};
 
   // ====================
   // Exports
