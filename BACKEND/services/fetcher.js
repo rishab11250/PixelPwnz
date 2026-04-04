@@ -234,19 +234,16 @@ const fetchSingleDataset = async (datasetName) => {
     if (cryptoMatch) {
         const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${cryptoMatch.id}&vs_currencies=inr,usd`);
         const priceUSD = response.data[cryptoMatch.id]?.usd;
+        const priceINR = response.data[cryptoMatch.id]?.inr;
         
-        let inrPerUsd = 83.5;
-        try {
-            const usdDataset = await Dataset.findOne({ name: 'forex-inr-usd' });
-            if (usdDataset) {
-                const latestSnap = await Snapshot.findOne({ dataset_id: usdDataset._id }).sort({ timestamp: -1 });
-                if (latestSnap && latestSnap.value) inrPerUsd = 1 / latestSnap.value;
-            }
-        } catch (e) {}
-
         if (priceUSD !== undefined) {
-            const computedINR = priceUSD * inrPerUsd;
-            await saveSnapshot(`crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'India', 'INR', computedINR, { symbol: cryptoMatch.symbol, usd: priceUSD, inr: computedINR });
+            const usdToInr = priceINR && priceUSD ? parseFloat((priceINR / priceUSD).toFixed(4)) : null;
+            await saveSnapshot(
+                `crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'global', 'USD',
+                priceUSD,   // ← Store USD as canonical value
+                { symbol: cryptoMatch.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr, inr_value: priceINR }
+            );
+            console.log(`  ✅ ${cryptoMatch.name}: $${priceUSD} (₹${priceINR})`);
         }
         return true;
     }

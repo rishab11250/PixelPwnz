@@ -60,7 +60,7 @@ function DatasetCard({ name, value, unit, percentageChange = 0, timestamp, accen
       </div>
 
       {/* Sparkline */}
-      <div className="h-14 w-full px-1 opacity-50 transition-opacity group-hover:opacity-90">
+      <div className="h-14 w-full px-1 opacity-50 transition-opacity group-hover:opacity-90" style={{ minWidth: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>

@@ -108,12 +108,19 @@ function EventLogPage() {
 
   // Get AI explanation
   async function handleExplain(eventId) {
-    if (explanations[eventId]) return
+    console.log('Requesting explanation for event:', eventId)
+    if (explanations[eventId] && explanations[eventId] !== 'Loading…' && explanations[eventId] !== 'Explanation unavailable') {
+      console.log('Explanation already cached:', explanations[eventId])
+      return
+    }
     setExplanations(p => ({ ...p, [eventId]: 'Loading…' }))
+    console.log('Fetching explanation...')
     try {
       const { explanation } = await api.explainEvent(eventId)
+      console.log('Got explanation:', explanation)
       setExplanations(p => ({ ...p, [eventId]: explanation }))
-    } catch {
+    } catch (error) {
+      console.error('Failed to get explanation:', error)
       setExplanations(p => ({ ...p, [eventId]: 'Explanation unavailable' }))
     }
   }
@@ -332,9 +339,20 @@ function EventLogPage() {
                           {/* AI Explanation */}
                           <div className="card-flat px-3 py-2">
                             <span className="text-[10px] uppercase text-text-muted">AI Analysis</span>
-                            <p className="mt-1 text-xs text-text-secondary">
-                              {explanations[ev._id] || 'Click to load explanation…'}
-                            </p>
+                            <div className="mt-1 text-xs text-text-secondary">
+                              {explanations[ev._id] === 'Loading…' && (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                  <span>Analyzing event patterns...</span>
+                                </div>
+                              )}
+                              {explanations[ev._id] && explanations[ev._id] !== 'Loading…' && (
+                                <p>{explanations[ev._id]}</p>
+                              )}
+                              {!explanations[ev._id] && (
+                                <p>Click to load explanation…</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </motion.div>

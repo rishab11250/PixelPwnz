@@ -76,7 +76,7 @@ export default function BeforeAfterChart({ datasetId, eventTime, color = '#f59e0
 
       <div className="card-flat px-2 py-2">
         <span className="text-[10px] uppercase text-text-muted font-semibold">7 days before event</span>
-        <div className="h-28 w-full mt-1">
+        <div className="h-28 w-full mt-1" style={{ minWidth: 0 }}>
           {before.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={before} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -100,7 +100,7 @@ export default function BeforeAfterChart({ datasetId, eventTime, color = '#f59e0
 
       <div className="card-flat px-2 py-2">
         <span className="text-[10px] uppercase text-text-muted font-semibold">7 days after event</span>
-        <div className="h-28 w-full mt-1">
+        <div className="h-28 w-full mt-1" style={{ minWidth: 0 }}>
           {after.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={after} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>

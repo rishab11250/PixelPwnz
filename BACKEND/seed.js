@@ -71,7 +71,15 @@ const detectAndCreateEvents = async (datasetId, snapshots) => {
         const curr = snapshots[i].value;
         if (prev === 0) continue;
         const pct = ((curr - prev) / prev) * 100;
-        if (Math.abs(pct) > 15) {
+        if (Math.abs(pct) > 5) { // Lower threshold to include more events
+            let severity;
+            if (Math.abs(pct) >= 25) {
+                severity = 'high';
+            } else if (Math.abs(pct) >= 15) {
+                severity = 'medium';
+            } else {
+                severity = 'low'; // 5-15% changes are "info" level
+            }
             events.push({
                 dataset_id: datasetId,
                 type: pct > 0 ? 'spike' : 'drop',
@@ -80,7 +88,7 @@ const detectAndCreateEvents = async (datasetId, snapshots) => {
                 current_value: curr,
                 timestamp: snapshots[i].timestamp,
                 message: `Value ${pct > 0 ? 'spiked' : 'dropped'} ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% from ${prev.toFixed(2)} to ${curr.toFixed(2)}`,
-                severity: Math.abs(pct) >= 25 ? 'high' : 'medium'
+                severity: severity
             });
         }
     }

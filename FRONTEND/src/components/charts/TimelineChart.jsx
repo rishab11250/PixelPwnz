@@ -8,12 +8,13 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Scatter,
+  ReferenceLine,
 } from 'recharts'
 
 const SEV_COLOR = { high: '#fb7185', medium: '#f59e0b', low: '#38bdf8' }
 
 /**
- * Line + area timeline with optional event markers (clickable dots).
+ * Professional trading-style timeline chart with enhanced crypto visualization
  * @param {Array<{ label: string, value: number, fullTs?: string, fullLabel?: string }>} data
  * @param {Array<{ _id: string, timestamp: string, severity: string, type?: string, percentage_change?: number }>} events
  */
@@ -48,6 +49,21 @@ export default function TimelineChart({
     setHoveredData(null)
   }, [])
 
+  // Calculate min/max for better Y-axis scaling
+  const { min, max, avg } = useMemo(() => {
+    if (!data.length) return { min: 0, max: 100, avg: 50 }
+    const values = data.map(d => d.value)
+    const minVal = Math.min(...values)
+    const maxVal = Math.max(...values)
+    const avgVal = values.reduce((a, b) => a + b, 0) / values.length
+    const range = maxVal - minVal
+    return {
+      min: minVal - range * 0.1,
+      max: maxVal + range * 0.1,
+      avg: avgVal
+    }
+  }, [data])
+
   const scatter = useMemo(() => {
     if (!data.length || !events.length) return []
     return events.map((ev) => {
@@ -78,24 +94,53 @@ export default function TimelineChart({
   if (!data.length) return null
 
   return (
-    <div className="relative" style={{ height }}>
-      <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+    <div className="relative w-full" style={{ height: height || 240, minWidth: 0 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 12, right: 12, left: 8, bottom: 12 }}>
           <defs>
+            {/* Enhanced gradient with more professional look */}
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={accent} stopOpacity={0.15} />
-              <stop offset="100%" stopColor={accent} stopOpacity={0} />
+              <stop offset="0%" stopColor={accent} stopOpacity={0.3} />
+              <stop offset="50%" stopColor={accent} stopOpacity={0.1} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0.01} />
             </linearGradient>
+            {/* Glow effect gradient */}
+            <radialGradient id={`${gradientId}Glow`}>
+              <stop offset="0%" stopColor={accent} stopOpacity={0.4} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0} />
+            </radialGradient>
           </defs>
-          <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
+          
+          {/* Enhanced grid for trading chart look */}
+          <CartesianGrid 
+            stroke="rgba(255,255,255,0.02)" 
+            strokeDasharray="2 4" 
+            vertical={true}
+            horizontal={true}
+          />
+          
+          {/* Enhanced X-axis */}
           <XAxis
             dataKey="label"
-            tick={{ fill: '#52525b', fontSize: 10 }}
-            axisLine={false}
+            tick={{ fill: '#71717a', fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }}
+            axisLine={{ stroke: 'rgba(255,255,255,0.05)', strokeWidth: 1 }}
             tickLine={false}
-            interval={Math.max(1, Math.floor(data.length / 10))}
+            interval={Math.max(1, Math.floor(data.length / 8))}
           />
-          <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+          
+          {/* Enhanced Y-axis */}
+          <YAxis 
+            domain={[min, max]}
+            tick={{ fill: '#71717a', fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }}
+            axisLine={{ stroke: 'rgba(255,255,255,0.05)', strokeWidth: 1 }}
+            tickLine={false}
+            tickFormatter={(value) => {
+              if (value >= 1000) return `${(value / 1000).toFixed(1)}k`
+              return value.toFixed(0)
+            }}
+          />
+          
+          {/* Enhanced area with better gradient */}
           <Area
             type="monotone"
             dataKey="value"
@@ -103,15 +148,28 @@ export default function TimelineChart({
             fill={`url(#${gradientId})`}
             isAnimationActive={false}
           />
+          
+          {/* Enhanced main line with glow effect */}
           <Line
             type="monotone"
             dataKey="value"
             stroke={accent}
-            strokeWidth={2}
+            strokeWidth={2.5}
             dot={false}
             activeDot={false}
             isAnimationActive={false}
+            strokeDasharray="0"
           />
+          
+          {/* Average line for trading chart feel */}
+          <ReferenceLine 
+            y={avg} 
+            stroke="rgba(255,255,255,0.1)" 
+            strokeDasharray="4 4" 
+            strokeWidth={1}
+          />
+          
+          {/* Event markers */}
           {scatter.length > 0 && (
             <Scatter
               data={scatter}
@@ -119,19 +177,35 @@ export default function TimelineChart({
                 const { cx, cy, payload } = props
                 if (cx == null || cy == null) return null
                 return (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={payload.z / 2 + 2}
-                    fill={payload.fill}
-                    stroke="#09090b"
-                    strokeWidth={2}
-                    style={{ cursor: onEventClick ? 'pointer' : 'default' }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onEventClick?.(payload.ev)
-                    }}
-                  />
+                  <g>
+                    {/* Outer glow */}
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={payload.z / 2 + 4}
+                      fill={payload.fill}
+                      fillOpacity={0.2}
+                      style={{ cursor: onEventClick ? 'pointer' : 'default' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEventClick?.(payload.ev)
+                      }}
+                    />
+                    {/* Inner circle */}
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={payload.z / 2 + 2}
+                      fill={payload.fill}
+                      stroke="#09090b"
+                      strokeWidth={2}
+                      style={{ cursor: onEventClick ? 'pointer' : 'default' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEventClick?.(payload.ev)
+                      }}
+                    />
+                  </g>
                 )
               }}
               isAnimationActive={false}
@@ -140,20 +214,32 @@ export default function TimelineChart({
         </ComposedChart>
       </ResponsiveContainer>
       
-      {/* Custom tooltip overlay */}
+      {/* Enhanced custom tooltip */}
       {mousePos && hoveredData && (
         <div
-          className="card px-3 py-2 text-xs shadow-xl pointer-events-none"
+          className="card px-3 py-2 text-xs shadow-xl pointer-events-none backdrop-blur-sm"
           style={{
             position: 'absolute',
             left: mousePos.x,
-            top: mousePos.y - 50,
+            top: mousePos.y - 60,
             transform: 'translateX(-50%)',
             zIndex: 1000,
+            background: 'rgba(24,24,27,0.95)',
+            border: `1px solid ${accent}40`,
+            boxShadow: `0 4px 20px ${accent}20`
           }}
         >
-          <p className="text-text-muted">{hoveredData.fullLabel || hoveredData.label}</p>
-          <p className="font-mono font-bold text-amber">{hoveredData.value}</p>
+          <div className="text-text-muted mb-1" style={{ fontSize: '10px' }}>
+            {hoveredData.fullLabel || hoveredData.label}
+          </div>
+          <div className="font-mono font-bold" style={{ color: accent, fontSize: '12px' }}>
+            {typeof hoveredData.value === 'number' 
+              ? hoveredData.value >= 1000 
+                ? `$${(hoveredData.value / 1000).toFixed(2)}k`
+                : hoveredData.value.toFixed(2)
+              : hoveredData.value
+            }
+          </div>
         </div>
       )}
       

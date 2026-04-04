@@ -20,9 +20,15 @@ export function timeAgoRelative(iso, simulatedMs) {
   return `${Math.floor(h / 24)}d ago`
 }
 
-export function formatValueDisplay(v, unit) {
+export function formatValueDisplay(v, unit, metadata = null) {
   if (v == null || v === '—') return '—'
-  if (unit === 'USD') return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  if (unit === 'USD') {
+    // For crypto, show INR by default since user wants INR values
+    if (metadata?.category === 'crypto' && metadata?.inr) {
+      return `₹${Number(metadata.inr).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+    }
+    return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  }
   if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
   if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit))
     return `${Number(v).toFixed(4)} ${unit}`

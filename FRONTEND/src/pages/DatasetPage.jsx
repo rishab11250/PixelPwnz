@@ -259,9 +259,9 @@ function DatasetPage() {
             <div className="flex items-center justify-between border-b border-edge px-5 py-3.5">
               <span className="text-sm font-semibold">Distribution</span>
             </div>
-            <div className="flex-1 p-4" style={{ minHeight: 280 }}>
+            <div className="flex-1 p-4" style={{ minHeight: 280, minWidth: 0 }}>
               {distData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={distData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.03)" strokeDasharray="4 4" vertical={false} />
                     <XAxis dataKey="range" tick={{ fill: '#52525b', fontSize: 9 }} axisLine={false} tickLine={false} />
