@@ -244,8 +244,8 @@ export default function LandingPage() {
           transition={{ delay: 0.35 }}
           className="mt-6 max-w-2xl text-lg leading-relaxed text-text-secondary"
         >
-          Monitor crypto prices, weather patterns, air quality, and forex rates — all in one dashboard. 
-          Detect anomalies instantly with AI-powered change detection.
+          Monitor crypto prices, weather patterns, air quality, and forex rates — all in one dashboard.
+          Detect anomalies instantly with GROQ AI-powered change detection.
         </motion.p>
 
         {/* CTAs */}
@@ -345,7 +345,7 @@ export default function LandingPage() {
               <span className="bg-gradient-to-r from-sky to-violet bg-clip-text text-transparent">understand your data</span>
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-text-secondary">
-              From real-time ingestion to AI-powered anomaly explanation — all in one unified dashboard.
+              From real-time ingestion to GROQ AI-powered anomaly explanation — all in one unified dashboard.
             </p>
           </motion.div>
 
@@ -367,7 +367,7 @@ export default function LandingPage() {
             <FeatureCard
               icon="🤖"
               title="AI Explanations"
-              desc="Get AI-generated explanations for every detected event — understand the 'why' behind each change."
+              desc="Get GROQ AI-generated explanations for every detected event — understand the 'why' behind each change."
               accent="#a78bfa"
               delay={0.16}
             />
@@ -425,7 +425,7 @@ export default function LandingPage() {
             {[
               { icon: '📈', title: 'Cryptocurrency', desc: 'Top 10 coins from CoinGecko — Bitcoin, Ethereum, Solana, XRP, and more. Live USD prices updated every 5 minutes.', accent: '#f59e0b', count: '10 coins', cities: 'BTC · ETH · SOL · XRP · BNB · USDT · USDC · ADA · DOGE · TRX' },
               { icon: '🌫️', title: 'Air Quality', desc: 'PM2.5 and AQI readings from 10 major Indian cities via WAQI. Track pollution levels across Delhi, Mumbai, Kolkata, and more.', accent: '#fb7185', count: '10 cities', cities: 'Delhi · Mumbai · Kolkata · Chennai · Bangalore · Hyderabad · Ahmedabad · Pune · Jaipur · Lucknow' },
-              { icon: '🌡️', title: 'Weather', desc: 'Temperature readings from 10 Indian and 5 global cities using Open-Meteo. Perfect for cross-city, cross-continent comparisons.', accent: '#38bdf8', count: '15 cities', cities: 'Delhi · Mumbai · New York · London · Tokyo · Dubai · Sydney · Kolkata · Chennai · Bangalore' },
+              { icon: '🌡️', title: 'Weather', desc: 'Temperature readings from 10 Indian cities using Open-Meteo. Perfect for cross-city.', accent: '#38bdf8', count: '10 cities', cities: 'Delhi · Mumbai · Kolkata · Chennai · Bangalore · Hyderabad · Ahmedabad · Pune · Jaipur · Lucknow' },
               { icon: '💱', title: 'Forex Rates', desc: '5 major currency pairs against USD from ExchangeRate API. Track INR, EUR, GBP, JPY, and AUD in real time.', accent: '#a78bfa', count: '5 pairs', cities: 'USD/INR · USD/EUR · USD/GBP · USD/JPY · USD/AUD' },
             ].map((cat, i) => (
               <motion.div
@@ -477,7 +477,7 @@ export default function LandingPage() {
               { name: 'Node.js',     desc: 'Runtime',        icon: '🟢' },
               { name: 'Express',     desc: 'API Server',     icon: '🚀' },
               { name: 'MongoDB',     desc: 'Database',       icon: '🍃' },
-              { name: 'Gemini AI',   desc: 'Explanations',   icon: '🤖' },
+              { name: 'GROQ AI',    desc: 'Explanations',   icon: '🤖' },
             ].map((tech, i) => (
               <motion.div
                 key={tech.name}
